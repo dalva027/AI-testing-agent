@@ -1,0 +1,9 @@
+{
+  "name": "testing-agent-playwright-runner",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Isolated workspace where generated Playwright test specs are executed.",
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
