@@ -47,6 +47,7 @@ Thumbs.db
 
 # Playwright
 .ms-playwright/
+.playwright-mcp
 
 # Logs
 *.log
