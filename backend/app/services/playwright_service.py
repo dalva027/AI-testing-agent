@@ -11,6 +11,7 @@ with a hard timeout and is killed if it overruns.
 import asyncio
 import os
 import shutil
+import subprocess
 import time
 import uuid
 from pathlib import Path
@@ -42,9 +43,9 @@ Target Application URL: {base_url}
 
 """
     if target_files:
-        prompt += "\nRelevant Source Files:\n"
+        prompt += "\nRelevant Source Files (use these to derive accurate text, roles and routes):\n"
         for tf in target_files:
-            prompt += f"\n--- {tf['path']} ---\n{tf['content'][:1500]}\n"
+            prompt += f"\n--- {tf['path']} ---\n{tf['content'][:4000]}\n"
 
     if global_instruction:
         prompt += f"\nGlobal Instructions: {global_instruction}\n"
@@ -68,15 +69,27 @@ Rules:
 - Add appropriate waits (waitForLoadState, waitForSelector, waitForURL)
 - Handle loading states and network idle
 - Add meaningful comments
-- Make assertions specific and testable
 - If the test type is 'api', use page.request to test endpoints
 - If 'auth', test login/logout flows
 - If 'form', test form submission with valid and invalid data
 - If 'edge-case', test error states and boundary conditions
+
+Write SIMPLE, ROBUST tests that pass against the real running app. A small number of
+high-signal assertions is better than many brittle ones. Follow these strictly:
+- Prefer web-first assertions that auto-wait, e.g. `await expect(locator).toBeVisible()`. Never use fixed `waitForTimeout` sleeps.
+- Do NOT assert exact counts of dynamic/repeated lists (avoid `toHaveCount`). Instead assert the FIRST expected item is visible using `.first()`.
+- NEVER use `toHaveText` on headings or prose: it requires the WHOLE string to match exactly, including line breaks/whitespace from the JSX, so it is extremely brittle. Use `toContainText(/short distinctive substring/i)` instead (e.g. `await expect(heroTitle).toContainText(/perfected/i)`).
+- Match text with case-insensitive substrings/regex (e.g. `getByText(/screen repair/i)`), not full-string equality. Do not include `\n` or trailing punctuation in matchers.
+- Do NOT hard-code prices, phone numbers, counts, or marketing copy you are not certain about. Assert on stable, structural things: headings, roles, nav links, key labels.
+- Only assert visibility for elements actually rendered at the default desktop viewport (~1280px). Elements behind a mobile/hamburger menu are hidden on desktop — open the menu first or skip them.
+- STRICT-MODE SAFETY (most common failure): a locator that matches more than one element makes Playwright throw. These are simple smoke tests, so append `.first()` to EVERY locator you assert on or click — e.g. `await expect(page.getByRole('link', { name: /get a free quote/i }).first()).toBeVisible()`. For navigation, additionally scope to the region and pass `exact: true` (e.g. `page.locator('nav').getByRole('link', { name: 'Services', exact: true }).first()`).
+- Do NOT assume the order, position, or count of list/grid items. Never assert that a specific card/item is the "first" or "last". Only reference an item by text you can SEE verbatim in the source above; if you cannot confirm the exact text, assert structurally instead (e.g. that at least one card/heading of that type is visible).
+- Only assert that a button/link exists if its label or href appears in the source above. To verify navigation, click it and assert `await expect(page).toHaveURL(/\\/route/)` rather than re-checking exact button text.
+- Keep it to one focused `test(...)` block. Do not invent routes or selectors not supported by the source above.
 - Return ONLY the JavaScript code inside a code block. No extra text.
 """
 
-    text = await call_ai(prompt, temperature=0.2)
+    text = await call_ai(prompt, temperature=0.0)
 
     # Extract JS from a code block when present.
     if "```javascript" in text:
@@ -148,33 +161,41 @@ async def run_playwright_test(
     log("[SYSTEM] Launching Playwright test runner (isolated subprocess)...")
     success = False
     error: str | None = None
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            npx, "playwright", "test", f"tests/{spec_name}", "--reporter=line",
+
+    # Run the blocking subprocess in a worker thread rather than via
+    # asyncio.create_subprocess_exec. On Windows, uvicorn selects the
+    # SelectorEventLoop whenever it runs with a subprocess (e.g. `--reload`),
+    # and that loop raises NotImplementedError on create_subprocess_exec.
+    # subprocess.run in a thread works regardless of the active event loop.
+    def _run_blocking() -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [npx, "playwright", "test", f"tests/{spec_name}", "--reporter=line"],
             cwd=str(RUNNER_DIR),
             env=env,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout / 1000,
         )
-        try:
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout / 1000)
-        except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
-            log(f"[SYSTEM ERROR] Test execution timed out after {timeout}ms")
-            return result(False, error="timeout")
 
-        output = stdout.decode("utf-8", errors="replace") if stdout else ""
+    try:
+        completed = await asyncio.to_thread(_run_blocking)
+
+        output = (completed.stdout or "") + (completed.stderr or "")
         for line in output.splitlines():
             if line.strip():
                 log(f"[BROWSER] {line}")
 
-        success = proc.returncode == 0
+        success = completed.returncode == 0
         if success:
             log("[SYSTEM] Test passed")
         else:
-            log(f"[SYSTEM ERROR] Test failed (exit code {proc.returncode})")
+            log(f"[SYSTEM ERROR] Test failed (exit code {completed.returncode})")
             error = "Test assertions failed or the script errored"
+    except subprocess.TimeoutExpired:
+        log(f"[SYSTEM ERROR] Test execution timed out after {timeout}ms")
+        return result(False, error="timeout")
     except Exception as e:  # noqa: BLE001
         log(f"[SYSTEM ERROR] Failed to run test: {e}")
         error = str(e)

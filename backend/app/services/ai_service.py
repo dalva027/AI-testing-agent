@@ -115,7 +115,7 @@ Global instructions: {global_instruction or 'None'}
 Source Files:
 """
     for fc in file_contents:
-        prompt += f"\n--- File: {fc['path']} ---\n{fc['content'][:2000]}\n"
+        prompt += f"\n--- File: {fc['path']} ---\n{fc['content'][:3500]}\n"
 
     prompt += """
 Based on the above code, generate test cases that cover:

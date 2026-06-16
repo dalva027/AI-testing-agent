@@ -7,7 +7,7 @@ export default function Layout() {
   const { user, logout } = useUser()
 
   const navItems = [
-    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/workspace', label: 'Workspace', icon: FolderGit2 },
     { path: '/results', label: 'Test Results', icon: BarChart3 },
   ]

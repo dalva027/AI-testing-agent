@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, createContext, useContext } from 'rea
 import axios from 'axios'
 import { Toaster } from 'react-hot-toast'
 import Layout from './components/Layout'
+import Landing from './pages/Landing'
 import Dashboard from './pages/Dashboard'
 import Workspace from './pages/Workspace'
 import TestResults from './pages/TestResults'
@@ -107,7 +108,8 @@ function App() {
     <UserContext.Provider value={{ user, setUser, token, setToken, logout }}>
       <Routes>
         <Route path="/" element={<Layout />}>
-          <Route index element={<Dashboard />} />
+          <Route index element={<Landing />} />
+          <Route path="dashboard" element={<Dashboard />} />
           <Route path="workspace" element={<Workspace />} />
           <Route path="results" element={<TestResults />} />
         </Route>

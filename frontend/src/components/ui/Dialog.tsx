@@ -18,50 +18,51 @@ export function Dialog({ open: controlledOpen, onOpenChange, children }: {
   onOpenChange?: (open: boolean) => void
   children: React.ReactNode
 }) {
+  const isControlled = controlledOpen !== undefined
   const [internalOpen, setInternalOpen] = useState(false)
-  const isOpen = controlledOpen !== undefined ? controlledOpen : internalOpen
+  const isOpen = isControlled ? controlledOpen : internalOpen
   const setOpen = useCallback((v: boolean) => {
-    setInternalOpen(v)
+    // Only own the state when uncontrolled; otherwise defer to the parent.
+    if (!isControlled) setInternalOpen(v)
     onOpenChange?.(v)
-  }, [onOpenChange])
-
-  const handleBackdrop = useCallback(() => setOpen(false), [setOpen])
+  }, [isControlled, onOpenChange])
 
   useEffect(() => {
-    if (isOpen) {
-      const handler = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') setOpen(false)
-      }
-      document.addEventListener('keydown', handler)
-      return () => document.removeEventListener('keydown', handler)
+    if (!isOpen) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
     }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
   }, [isOpen, setOpen])
 
+  // Always render children so the trigger stays mounted; the overlay/content
+  // is gated on `open` inside DialogContent.
   return (
     <DialogContext.Provider value={{ open: isOpen, setOpen, onOpenChange: onOpenChange || setOpen }}>
-      {isOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
-            onClick={handleBackdrop}
-          />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            {children}
-          </div>
-        </>
-      )}
+      {children}
     </DialogContext.Provider>
   )
 }
 
 export function DialogContent({ children, className = '', ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  const { open, setOpen } = useContext(DialogContext)
+  if (!open) return null
   return (
-    <div
-      className={`bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col ${className}`}
-      {...props}
-    >
-      {children}
-    </div>
+    <>
+      <div
+        className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+        onClick={() => setOpen(false)}
+      />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div
+          className={`bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col ${className}`}
+          {...props}
+        >
+          {children}
+        </div>
+      </div>
+    </>
   )
 }
 

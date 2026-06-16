@@ -11,6 +11,7 @@ import {
   Code,
   ChevronDown,
   ChevronUp,
+  RotateCcw,
 } from 'lucide-react'
 
 interface TestCase {
@@ -158,6 +159,25 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
     setIsExecuting(true)
   }
 
+  // Reset prior results to idle and run the whole selected batch again.
+  const handleRunAgain = () => {
+    if (testCases.length === 0) return
+    const reset: Record<number, RunResult> = {}
+    testCases.forEach(tc => {
+      reset[tc.id] = {
+        testCaseId: tc.id,
+        status: 'idle',
+        logs: ['Waiting to run...'],
+        // Keep the script reference so 'cache' mode shows the right status label.
+        playwrightScript: results[tc.id]?.playwrightScript || tc.playwright_script || undefined,
+      }
+    })
+    setResults(reset)
+    setSelectedDetail(testCases[0]?.id ?? null)
+    setCurrentIdx(0)
+    setIsExecuting(true)
+  }
+
   const handleStop = () => {
     setIsExecuting(false)
   }
@@ -294,10 +314,16 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
             {/* Footer */}
             <div className="p-4 border-t border-gray-200 flex items-center gap-3 shrink-0">
               {allDone ? (
-                <button onClick={onClose} className="btn-primary flex-1 justify-center">
-                  <CheckCircle2 className="w-4 h-4" />
-                  Done
-                </button>
+                <>
+                  <button onClick={handleRunAgain} className="btn-primary flex-1 justify-center">
+                    <RotateCcw className="w-4 h-4" />
+                    Run Again
+                  </button>
+                  <button onClick={onClose} className="btn-secondary justify-center">
+                    <CheckCircle2 className="w-4 h-4" />
+                    Done
+                  </button>
+                </>
               ) : isExecuting ? (
                 <>
                   <button onClick={handleStop} className="btn-secondary flex-1 justify-center">
