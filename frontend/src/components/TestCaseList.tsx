@@ -40,9 +40,10 @@ interface Props {
   targetDomain: string
   globalInstruction: string | null
   onReload: () => void
+  focusTestCaseId?: number | null
 }
 
-export default function TestCaseList({ repoId, branch, targetDomain, globalInstruction, onReload }: Props) {
+export default function TestCaseList({ repoId, branch, targetDomain, globalInstruction, onReload, focusTestCaseId }: Props) {
   const { user, token, setUser } = useUser()
   const [testCases, setTestCases] = useState<TestCase[]>([])
   const [loading, setLoading] = useState(true)
@@ -50,6 +51,7 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [executionModalOpen, setExecutionModalOpen] = useState(false)
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [highlightId, setHighlightId] = useState<number | null>(null)
 
   const fetchTestCases = async () => {
     setLoading(true)
@@ -66,6 +68,25 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
   useEffect(() => {
     fetchTestCases()
   }, [repoId])
+
+  // When deep-linked from a project page (?tc=:id), expand, scroll to, and
+  // briefly highlight that specific test case once the list has loaded.
+  useEffect(() => {
+    if (loading || !focusTestCaseId) return
+    if (!testCases.some(tc => tc.id === focusTestCaseId)) return
+    setExpandedId(focusTestCaseId)
+    setHighlightId(focusTestCaseId)
+    const scrollTimer = setTimeout(() => {
+      document
+        .getElementById(`tc-${focusTestCaseId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 100)
+    const clearTimer = setTimeout(() => setHighlightId(null), 2500)
+    return () => {
+      clearTimeout(scrollTimer)
+      clearTimeout(clearTimer)
+    }
+  }, [loading, focusTestCaseId, testCases])
 
   const handleGenerate = async () => {
     if (!token) {
@@ -131,7 +152,7 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
   return (
     <div className="space-y-4">
       {/* Generate Section */}
-      <div className="bg-gradient-to-r from-primary-50 to-purple-50 border border-primary-200 rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="bg-gradient-to-r from-primary-50 to-purple-50 dark:from-primary-500/10 dark:to-purple-500/10 border border-primary-200 dark:border-primary-500/30 rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h3 className="font-semibold text-gray-900 flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-primary-600" />
@@ -172,7 +193,15 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
       ) : (
         <div className="space-y-2">
           {testCases.map(tc => (
-            <div key={tc.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div
+              key={tc.id}
+              id={`tc-${tc.id}`}
+              className={`bg-white rounded-xl border overflow-hidden transition-shadow ${
+                highlightId === tc.id
+                  ? 'border-primary-400 ring-2 ring-primary-300'
+                  : 'border-gray-200'
+              }`}
+            >
               {/* Row */}
               <div className="p-4 flex items-center gap-3">
                 <input

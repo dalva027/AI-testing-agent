@@ -1,5 +1,8 @@
 ﻿@import "tailwindcss";
 
+/* Class-based dark mode (toggled by adding `.dark` to <html>). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-primary-50: #eff6ff;
   --color-primary-100: #dbeafe;
@@ -110,4 +113,106 @@
     linear-gradient(to right, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
   background-size: 26px 26px;
+}
+
+/* ============================================================ *
+ * Dark mode — centralized overrides.
+ * These rules are intentionally UNLAYERED so they take precedence
+ * over Tailwind's layered utilities, letting the existing light
+ * utility classes (bg-white, text-gray-900, ...) flip to dark with
+ * no per-element JSX changes. Surfaces that are meant to stay dark
+ * (bg-gray-900/950 code & toolbars, text-white) are left untouched.
+ * ============================================================ */
+.dark body {
+  background-color: #0f172a;
+  color: #f1f5f9;
+}
+
+/* Surfaces */
+.dark .bg-white { background-color: #1e293b; }
+.dark .bg-white\/80 { background-color: rgba(30, 41, 59, 0.8); }
+.dark .bg-white\/90 { background-color: rgba(30, 41, 59, 0.9); }
+.dark .bg-gray-50 { background-color: #0f172a; }
+.dark .bg-gray-50\/50 { background-color: rgba(15, 23, 42, 0.5); }
+.dark .bg-gray-100 { background-color: #334155; }
+
+/* Text */
+.dark .text-gray-900 { color: #f1f5f9; }
+.dark .text-gray-700 { color: #e2e8f0; }
+.dark .text-gray-600 { color: #cbd5e1; }
+.dark .text-gray-500 { color: #94a3b8; }
+.dark .text-gray-400 { color: #94a3b8; }
+
+/* Borders */
+.dark .border-gray-100 { border-color: #1f2937; }
+.dark .border-gray-200 { border-color: #334155; }
+.dark .border-gray-300 { border-color: #475569; }
+/* Apply to every child (not just `~` siblings) so the first row's divider flips too. */
+.dark .divide-gray-100 > * { border-color: #1f2937; }
+.dark .divide-gray-200 > * { border-color: #334155; }
+
+/* Hover backgrounds on rows/items */
+.dark .hover\:bg-gray-50:hover { background-color: #334155; }
+.dark .hover\:bg-gray-100:hover { background-color: #334155; }
+
+/* Shared component classes (use @apply, so override the class directly) */
+.dark .card { background-color: #1e293b; border-color: #334155; }
+.dark .stat-card { background-color: #1e293b; border-color: #334155; }
+.dark .input { background-color: #0f172a; border-color: #475569; color: #f1f5f9; }
+.dark .btn-secondary { background-color: #1e293b; border-color: #475569; color: #e2e8f0; }
+.dark .btn-secondary:hover { background-color: #334155; }
+
+/* Accent icon chips (the soft -50 tints behind stat-card icons) */
+.dark .bg-primary-50 { background-color: rgba(37, 99, 235, 0.16); }
+.dark .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.14); }
+.dark .bg-rose-50 { background-color: rgba(244, 63, 94, 0.14); }
+.dark .bg-amber-50 { background-color: rgba(245, 158, 11, 0.14); }
+.dark .bg-blue-50 { background-color: rgba(59, 130, 246, 0.14); }
+.dark .bg-purple-50 { background-color: rgba(168, 85, 247, 0.14); }
+
+/* Brand accents — brighten for contrast on dark surfaces */
+.dark .text-primary-600 { color: #60a5fa; }
+.dark .text-primary-700 { color: #93c5fd; }
+.dark .bg-primary-100 { background-color: rgba(37, 99, 235, 0.25); }
+
+/* Credits pill */
+.dark .border-amber-200 { border-color: rgba(245, 158, 11, 0.35); }
+.dark .text-amber-700 { color: #fcd34d; }
+.dark .text-amber-800 { color: #fde68a; }
+
+/* Type / status pill tints (used inline and via badge-* classes) */
+.dark .bg-blue-100 { background-color: rgba(59, 130, 246, 0.2); }
+.dark .text-blue-800 { color: #93c5fd; }
+.dark .bg-purple-100 { background-color: rgba(168, 85, 247, 0.2); }
+.dark .text-purple-800 { color: #d8b4fe; }
+.dark .bg-green-100 { background-color: rgba(34, 197, 94, 0.2); }
+.dark .text-green-800 { color: #86efac; }
+.dark .bg-amber-100 { background-color: rgba(245, 158, 11, 0.2); }
+.dark .bg-indigo-100 { background-color: rgba(99, 102, 241, 0.2); }
+.dark .text-indigo-800 { color: #c7d2fe; }
+.dark .bg-rose-100 { background-color: rgba(244, 63, 94, 0.2); }
+.dark .text-rose-800 { color: #fda4af; }
+.dark .bg-red-100 { background-color: rgba(239, 68, 68, 0.2); }
+.dark .text-red-700 { color: #fca5a5; }
+.dark .bg-yellow-100 { background-color: rgba(234, 179, 8, 0.2); }
+.dark .text-yellow-700 { color: #fde047; }
+
+.dark .badge-passed { background-color: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+.dark .badge-failed { background-color: rgba(244, 63, 94, 0.2); color: #fda4af; }
+.dark .badge-pending { background-color: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+.dark .badge-info { background-color: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+.dark .badge-neutral { background-color: #334155; color: #cbd5e1; }
+
+/* Sections that are dark in BOTH themes (landing hero / CTA band): the dark
+ * overrides above would wrongly darken their inner white buttons, so restore
+ * those here. These come AFTER the dark rules, so they win on equal specificity,
+ * and are no-ops in light mode (the values already match). */
+.static-dark .bg-white { background-color: #ffffff; }
+.static-dark .text-primary-700 { color: #1d4ed8; }
+
+/* Smooth theme switch */
+body,
+.card,
+.stat-card {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }

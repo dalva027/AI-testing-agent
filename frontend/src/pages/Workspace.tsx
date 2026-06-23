@@ -1,4 +1,5 @@
 ﻿import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import {
   Github,
@@ -40,6 +41,7 @@ interface Stats {
 
 export default function Workspace() {
   const { token } = useUser()
+  const [searchParams] = useSearchParams()
   const [repos, setRepos] = useState<Repo[]>([])
   const [githubRepos, setGithubRepos] = useState<any[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
@@ -134,6 +136,18 @@ export default function Workspace() {
       setStatsLoading(false)
     }
   }
+
+  // Deep link from a project page (/workspace?repo=:id): auto-open that repo.
+  useEffect(() => {
+    const repoParam = searchParams.get('repo')
+    if (!repoParam || repos.length === 0) return
+    const target = repos.find(r => String(r.id) === repoParam)
+    if (target && selectedRepo?.id !== target.id) {
+      setSelectedRepo(target)
+      loadStats(target.id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repos, searchParams])
 
   const filteredRepos = repos.filter(r =>
     r.full_name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -292,6 +306,11 @@ export default function Workspace() {
                       targetDomain={repo.target_domain || 'http://localhost:5173'}
                       globalInstruction={repo.global_instruction}
                       onReload={() => loadStats(repo.id)}
+                      focusTestCaseId={
+                        String(repo.id) === searchParams.get('repo')
+                          ? Number(searchParams.get('tc')) || null
+                          : null
+                      }
                     />
                   </div>
                 )}

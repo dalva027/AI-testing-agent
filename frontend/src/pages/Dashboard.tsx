@@ -1,48 +1,70 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import axios from 'axios'
 import {
   FolderGit2,
   ListChecks,
   CheckCircle2,
-  XCircle,
-  Clock,
   TrendingUp,
   RefreshCw,
   Loader2,
   Github,
   Plus,
   ArrowRight,
-  Activity,
-  BarChart3,
+  GitBranch,
 } from 'lucide-react'
+import axios from 'axios'
 import toast from 'react-hot-toast'
 import { useUser } from '../App'
 
 interface TestCase {
   id: number
-  title: string
-  description: string
-  test_type: string
-  priority: string
   status: string
+  test_type: string
   duration_ms: number | null
   created_at: string
+  repo_id: number | null
   repo_name: string
 }
 
 interface Repo {
   id: number
+  name: string
   full_name: string
+  default_branch: string
+  language: string | null
+  target_domain: string | null
 }
 
-const TYPE_COLORS: Record<string, string> = {
-  ui: 'bg-blue-100 text-blue-800',
-  auth: 'bg-purple-100 text-purple-800',
-  api: 'bg-green-100 text-green-800',
-  form: 'bg-amber-100 text-amber-800',
-  integration: 'bg-indigo-100 text-indigo-800',
-  'edge-case': 'bg-rose-100 text-rose-800',
+interface ProjectStats {
+  total: number
+  passed: number
+  failed: number
+  pending: number
+  passRate: number
+  lastActivity: number | null
+}
+
+function computeStats(cases: TestCase[]): ProjectStats {
+  const total = cases.length
+  const passed = cases.filter(c => c.status === 'passed').length
+  const failed = cases.filter(c => c.status === 'failed').length
+  const pending = total - passed - failed
+  const passRate = total > 0 ? Math.round((passed / total) * 100) : 0
+  const lastActivity = cases.reduce<number | null>((acc, c) => {
+    const t = new Date(c.created_at).getTime()
+    return acc === null || t > acc ? t : acc
+  }, null)
+  return { total, passed, failed, pending, passRate, lastActivity }
+}
+
+function timeAgo(ts: number | null): string {
+  if (!ts) return 'No runs yet'
+  const mins = Math.floor((Date.now() - ts) / 60000)
+  if (mins < 1) return 'Just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
 }
 
 export default function Dashboard() {
@@ -65,7 +87,7 @@ export default function Dashboard() {
       setRepos(repoRes.data)
       setTestCases(tcRes.data)
     } catch {
-      toast.error('Failed to load dashboard data')
+      toast.error('Failed to load projects')
       setRepos([])
       setTestCases([])
     } finally {
@@ -86,7 +108,7 @@ export default function Dashboard() {
         </div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Connect GitHub to get started</h2>
         <p className="text-gray-500 mb-6">
-          Your dashboard tracks tests across your repositories. Connect a GitHub account to begin.
+          Your projects track tests across your repositories. Connect a GitHub account to begin.
         </p>
         <a href="/api/auth/github/login" className="btn-primary inline-flex items-center gap-2">
           <Github className="w-4 h-4" />
@@ -96,29 +118,31 @@ export default function Dashboard() {
     )
   }
 
-  // ---- Derived stats (computed from live data only) ----
+  // ---- Aggregates ----
   const total = testCases.length
   const passed = testCases.filter(tc => tc.status === 'passed').length
-  const failed = testCases.filter(tc => tc.status === 'failed').length
-  const pending = total - passed - failed
   const passRate = total > 0 ? Math.round((passed / total) * 100) : 0
 
-  const typeCounts = testCases.reduce<Record<string, number>>((acc, tc) => {
-    acc[tc.test_type] = (acc[tc.test_type] || 0) + 1
-    return acc
-  }, {})
-  const typeEntries = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])
-  const maxType = typeEntries.length ? typeEntries[0][1] : 0
+  const byRepo = new Map<number, TestCase[]>()
+  for (const tc of testCases) {
+    if (tc.repo_id == null) continue
+    const arr = byRepo.get(tc.repo_id)
+    if (arr) arr.push(tc)
+    else byRepo.set(tc.repo_id, [tc])
+  }
 
-  const recent = [...testCases]
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 6)
+  const projects = repos
+    .map(repo => ({ repo, stats: computeStats(byRepo.get(repo.id) || []) }))
+    .sort(
+      (a, b) =>
+        (b.stats.lastActivity ?? 0) - (a.stats.lastActivity ?? 0) ||
+        b.stats.total - a.stats.total
+    )
 
-  const statCards = [
-    { label: 'Repositories', value: repos.length, icon: FolderGit2, color: 'text-gray-900', bg: 'bg-gray-50' },
+  const summaryCards = [
+    { label: 'Projects', value: repos.length, icon: FolderGit2, color: 'text-gray-900', bg: 'bg-gray-50' },
     { label: 'Total Tests', value: total, icon: ListChecks, color: 'text-gray-900', bg: 'bg-gray-50' },
     { label: 'Passed', value: passed, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { label: 'Failed', value: failed, icon: XCircle, color: 'text-rose-600', bg: 'bg-rose-50' },
     { label: 'Pass Rate', value: `${passRate}%`, icon: TrendingUp, color: 'text-primary-600', bg: 'bg-primary-50' },
   ]
 
@@ -128,9 +152,9 @@ export default function Dashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">
-            {user?.name ? `Welcome back, ${user.name}` : 'Dashboard'}
+            {user?.name ? `Welcome back, ${user.name}` : 'Projects'}
           </h1>
-          <p className="text-gray-500 mt-1">A live overview of your repositories and test runs</p>
+          <p className="text-gray-500 mt-1">Your repositories and their test coverage at a glance</p>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={fetchData} className="btn-secondary inline-flex items-center gap-2">
@@ -148,16 +172,16 @@ export default function Dashboard() {
         <div className="flex items-center justify-center py-24">
           <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
         </div>
-      ) : repos.length === 0 && total === 0 ? (
-        /* ---- Empty state (no seeded data) ---- */
+      ) : repos.length === 0 ? (
+        /* ---- Empty state ---- */
         <div className="card p-12 text-center">
           <div className="w-16 h-16 bg-primary-50 rounded-2xl flex items-center justify-center mx-auto mb-5">
             <FolderGit2 className="w-8 h-8 text-primary-600" />
           </div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">Nothing to show yet</h3>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">No projects yet</h3>
           <p className="text-gray-500 mb-6 max-w-md mx-auto">
-            Add a repository and generate your first set of AI test cases — your stats and recent
-            activity will appear here.
+            Add a repository and generate your first set of AI test cases — each project will show its
+            coverage here.
           </p>
           <Link to="/workspace" className="btn-primary inline-flex items-center gap-2">
             <Plus className="w-4 h-4" />
@@ -166,9 +190,9 @@ export default function Dashboard() {
         </div>
       ) : (
         <>
-          {/* Stat cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            {statCards.map((stat, i) => (
+          {/* Global summary */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {summaryCards.map((stat, i) => (
               <div key={i} className="stat-card">
                 <div className="flex items-center justify-between">
                   <div>
@@ -183,103 +207,80 @@ export default function Dashboard() {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Recent activity */}
-            <div className="card lg:col-span-2 overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-                <Activity className="w-4 h-4 text-gray-400" />
-                <h3 className="font-semibold text-gray-900">Recent Test Cases</h3>
-                <Link to="/results" className="ml-auto text-sm text-primary-600 hover:text-primary-700 inline-flex items-center gap-1">
-                  View all <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-              {recent.length === 0 ? (
-                <div className="p-8 text-center text-gray-400 text-sm">
-                  No test cases yet. Generate some from a repository in your workspace.
-                </div>
-              ) : (
-                <div className="divide-y divide-gray-100">
-                  {recent.map(tc => (
-                    <div key={tc.id} className="px-5 py-3 flex items-center gap-3">
-                      <div className="shrink-0">
-                        {tc.status === 'passed' ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        ) : tc.status === 'failed' ? (
-                          <XCircle className="w-4 h-4 text-rose-600" />
-                        ) : (
-                          <Clock className="w-4 h-4 text-amber-500" />
-                        )}
+          {/* Projects grid */}
+          <div>
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Projects</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {projects.map(({ repo, stats }) => (
+                <Link
+                  key={repo.id}
+                  to={`/dashboard/${repo.id}`}
+                  className="card card-hover p-5 block group"
+                >
+                  {/* Top row */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center shrink-0">
+                        <FolderGit2 className="w-5 h-5 text-gray-600" />
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">{tc.title}</p>
-                        <p className="text-xs text-gray-500 truncate">{tc.repo_name}</p>
-                      </div>
-                      <span className={`badge ${TYPE_COLORS[tc.test_type] || 'badge-neutral'} shrink-0`}>
-                        {tc.test_type}
-                      </span>
-                      <span className="text-xs text-gray-400 w-16 text-right shrink-0">
-                        {tc.duration_ms ? `${Math.round(tc.duration_ms)}ms` : '—'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Breakdown */}
-            <div className="space-y-6">
-              {/* Status summary */}
-              <div className="card p-5">
-                <h3 className="font-semibold text-gray-900 mb-4">Status</h3>
-                <div className="space-y-3 text-sm">
-                  {[
-                    { label: 'Passed', value: passed, color: 'bg-emerald-500' },
-                    { label: 'Failed', value: failed, color: 'bg-rose-500' },
-                    { label: 'Pending', value: pending, color: 'bg-amber-400' },
-                  ].map(s => (
-                    <div key={s.label}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-gray-600">{s.label}</span>
-                        <span className="font-medium text-gray-900">{s.value}</span>
-                      </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full ${s.color} rounded-full transition-all`}
-                          style={{ width: `${total > 0 ? (s.value / total) * 100 : 0}%` }}
-                        />
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-gray-900 truncate">{repo.name}</h3>
+                        <p className="text-xs text-gray-400 truncate">{repo.full_name}</p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Type breakdown */}
-              <div className="card p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <BarChart3 className="w-4 h-4 text-gray-400" />
-                  <h3 className="font-semibold text-gray-900">By Type</h3>
-                </div>
-                {typeEntries.length === 0 ? (
-                  <p className="text-sm text-gray-400">No test cases yet.</p>
-                ) : (
-                  <div className="space-y-3 text-sm">
-                    {typeEntries.map(([type, count]) => (
-                      <div key={type}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-gray-600">{type}</span>
-                          <span className="font-medium text-gray-900">{count}</span>
-                        </div>
-                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-primary-500 to-purple-500 rounded-full transition-all"
-                            style={{ width: `${maxType > 0 ? (count / maxType) * 100 : 0}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
+                    <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-primary-500 group-hover:translate-x-0.5 transition-all shrink-0 mt-1" />
                   </div>
-                )}
-              </div>
+
+                  {/* Meta */}
+                  <div className="flex items-center gap-3 text-xs text-gray-500 mt-3">
+                    <span className="inline-flex items-center gap-1">
+                      <GitBranch className="w-3.5 h-3.5" />
+                      {repo.default_branch}
+                    </span>
+                    {repo.language && (
+                      <span className="inline-flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-blue-400" />
+                        {repo.language}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Counts */}
+                  <div className="grid grid-cols-3 gap-2 mt-4 text-center">
+                    <div className="bg-gray-50 rounded-lg py-2">
+                      <p className="text-lg font-bold text-gray-900 leading-none">{stats.total}</p>
+                      <p className="text-[11px] text-gray-500 mt-1">Tests</p>
+                    </div>
+                    <div className="bg-emerald-50 rounded-lg py-2">
+                      <p className="text-lg font-bold text-emerald-600 leading-none">{stats.passed}</p>
+                      <p className="text-[11px] text-gray-500 mt-1">Passed</p>
+                    </div>
+                    <div className="bg-rose-50 rounded-lg py-2">
+                      <p className="text-lg font-bold text-rose-600 leading-none">{stats.failed}</p>
+                      <p className="text-[11px] text-gray-500 mt-1">Failed</p>
+                    </div>
+                  </div>
+
+                  {/* Pass rate */}
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-gray-500">Pass rate</span>
+                      <span className="font-medium text-gray-900">{stats.passRate}%</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-500 rounded-full transition-all"
+                        style={{ width: `${stats.passRate}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Footer */}
+                  <p className="text-[11px] text-gray-400 mt-3">
+                    {stats.total === 0 ? 'No tests generated yet' : `Updated ${timeAgo(stats.lastActivity)}`}
+                  </p>
+                </Link>
+              ))}
             </div>
           </div>
         </>

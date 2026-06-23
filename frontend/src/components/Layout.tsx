@@ -1,10 +1,10 @@
 ﻿import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Bug, LayoutDashboard, FolderGit2, BarChart3, LogOut } from 'lucide-react'
+import { Bug, LayoutDashboard, FolderGit2, BarChart3, LogOut, Sun, Moon } from 'lucide-react'
 import { useUser } from '../App'
 
 export default function Layout() {
   const location = useLocation()
-  const { user, logout } = useUser()
+  const { user, logout, theme, toggleTheme } = useUser()
 
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -12,14 +12,17 @@ export default function Layout() {
     { path: '/results', label: 'Test Results', icon: BarChart3 },
   ]
 
-  const isActive = (path: string) => location.pathname === path
+  const isActive = (path: string) =>
+    path === '/dashboard'
+      ? location.pathname.startsWith('/dashboard')
+      : location.pathname === path
 
   const handleLogout = () => {
     logout()
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
       {/* Top Nav */}
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -49,6 +52,14 @@ export default function Layout() {
             </div>
 
             <div className="flex items-center gap-3">
+              <button
+                onClick={toggleTheme}
+                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                aria-label="Toggle theme"
+                className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+              >
+                {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
               {user && (
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
                   <span className="text-xs font-medium text-amber-700">Credits:</span>

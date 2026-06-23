@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+﻿import { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
 import {
   BarChart3,
@@ -12,6 +12,24 @@ import {
   Filter,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { TrendChart, StackedBarChart, DonutChart } from '../components/Charts'
+
+// Each AI test-case generation costs this many credits (mirrors the backend).
+const GENERATION_COST = 200
+
+const TYPE_HEX: Record<string, string> = {
+  ui: '#3b82f6',
+  auth: '#a855f7',
+  api: '#22c55e',
+  form: '#f59e0b',
+  integration: '#6366f1',
+  'edge-case': '#f43f5e',
+}
+
+function dayKey(iso: string): string {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 interface TestCase {
   id: number
@@ -67,6 +85,64 @@ export default function TestResults() {
     return true
   })
 
+  // ---- Chart datasets (derived from the live test cases) ----
+  const charts = useMemo(() => {
+    const byDay = new Map<
+      string,
+      { passed: number; failed: number; generations: Set<string> }
+    >()
+    for (const tc of testCases) {
+      if (!tc.created_at) continue
+      const key = dayKey(tc.created_at)
+      let entry = byDay.get(key)
+      if (!entry) {
+        entry = { passed: 0, failed: 0, generations: new Set() }
+        byDay.set(key, entry)
+      }
+      if (tc.status === 'passed') entry.passed++
+      else if (tc.status === 'failed') entry.failed++
+      // All test cases from one /generate call share an exact created_at, so a
+      // distinct timestamp == one generation batch == one GENERATION_COST charge.
+      entry.generations.add(tc.created_at)
+    }
+
+    const days = [...byDay.keys()].sort()
+    const short = (k: string) => k.slice(5)
+
+    let cumP = 0
+    let cumF = 0
+    const passRate = days.map(k => {
+      const e = byDay.get(k)!
+      cumP += e.passed
+      cumF += e.failed
+      const denom = cumP + cumF
+      return { label: short(k), value: denom > 0 ? Math.round((cumP / denom) * 100) : 0 }
+    })
+
+    const passedVsFailed = days.map(k => {
+      const e = byDay.get(k)!
+      return { label: short(k), passed: e.passed, failed: e.failed }
+    })
+
+    const credits = days.map(k => {
+      const e = byDay.get(k)!
+      return { label: short(k), value: e.generations.size * GENERATION_COST }
+    })
+
+    // The AI sometimes emits compound types ("ui|integration"); bucket each test
+    // by its primary type so coverage slices stay clean, colored, and sum to total.
+    const typeCount = new Map<string, number>()
+    for (const tc of testCases) {
+      const primary = (tc.test_type || 'other').split('|')[0].trim() || 'other'
+      typeCount.set(primary, (typeCount.get(primary) || 0) + 1)
+    }
+    const coverage = [...typeCount.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([type, value]) => ({ label: type, value, color: TYPE_HEX[type] || '#94a3b8' }))
+
+    return { passRate, passedVsFailed, credits, coverage }
+  }, [testCases])
+
   const typeColors: Record<string, string> = {
     ui: 'bg-blue-100 text-blue-800',
     auth: 'bg-purple-100 text-purple-800',
@@ -112,6 +188,45 @@ export default function TestResults() {
           </div>
         ))}
       </div>
+
+      {/* Charts */}
+      {!loading && testCases.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="card p-5">
+            <h3 className="font-semibold text-gray-900 mb-4">Pass rate over time</h3>
+            <TrendChart
+              data={charts.passRate}
+              color="#7c3aed"
+              fmt={v => `${Math.round(v)}%`}
+              valueLabel="Pass rate"
+              clampMin={0}
+              clampMax={100}
+            />
+          </div>
+
+          <div className="card p-5">
+            <h3 className="font-semibold text-gray-900 mb-4">Passed vs failed (daily)</h3>
+            <StackedBarChart data={charts.passedVsFailed} />
+          </div>
+
+          <div className="card p-5">
+            <h3 className="font-semibold text-gray-900 mb-4">AI spend over time (credits)</h3>
+            <TrendChart
+              data={charts.credits}
+              color="#f59e0b"
+              area
+              fmt={v => `${Math.round(v)}`}
+              valueLabel="Credits"
+              clampMin={0}
+            />
+          </div>
+
+          <div className="card p-5">
+            <h3 className="font-semibold text-gray-900 mb-4">Coverage by test type</h3>
+            <DonutChart data={charts.coverage} />
+          </div>
+        </div>
+      )}
 
       {/* Filter */}
       <div className="flex items-center gap-2">

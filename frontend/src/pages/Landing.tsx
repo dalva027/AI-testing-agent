@@ -30,7 +30,7 @@ export default function Landing() {
   return (
     <div className="space-y-16">
       {/* ===== Hero ===== */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-[#1a1340] text-white">
+      <section className="static-dark relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-[#1a1340] text-white">
         {/* layered background */}
         <div className="absolute inset-0 bg-grid-dark opacity-60" />
         <div className="absolute -top-24 -left-16 w-96 h-96 bg-primary-600/30 rounded-full blur-3xl" />
@@ -219,7 +219,7 @@ export default function Landing() {
       </section>
 
       {/* ===== CTA band ===== */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-primary-600 to-purple-600 text-white p-8 md:p-12">
+      <section className="static-dark relative overflow-hidden rounded-3xl bg-gradient-to-r from-primary-600 to-purple-600 text-white p-8 md:p-12">
         <div className="absolute inset-0 bg-grid-dark opacity-40" />
         <div className="absolute -right-8 -bottom-8 opacity-20">
           <Bug className="w-48 h-48" />

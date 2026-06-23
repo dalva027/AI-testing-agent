@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast'
 import Layout from './components/Layout'
 import Landing from './pages/Landing'
 import Dashboard from './pages/Dashboard'
+import ProjectDashboard from './pages/ProjectDashboard'
 import Workspace from './pages/Workspace'
 import TestResults from './pages/TestResults'
 
@@ -15,12 +16,16 @@ interface AppUser {
   credits: number
 }
 
+type Theme = 'light' | 'dark'
+
 interface UserContextType {
   user: AppUser | null
   setUser: (u: AppUser | null) => void
   token: string | null
   setToken: (t: string | null) => void
   logout: () => void
+  theme: Theme
+  toggleTheme: () => void
 }
 
 const UserContext = createContext<UserContextType>({
@@ -29,9 +34,15 @@ const UserContext = createContext<UserContextType>({
   token: null,
   setToken: () => {},
   logout: () => {},
+  theme: 'light',
+  toggleTheme: () => {},
 })
 
 const useUser = () => useContext(UserContext)
+const useTheme = () => {
+  const { theme, toggleTheme } = useContext(UserContext)
+  return { theme, toggleTheme }
+}
 
 function applyAuthHeader(token: string | null) {
   if (token) {
@@ -44,6 +55,21 @@ function applyAuthHeader(token: string | null) {
 function App() {
   const [user, setUserState] = useState<AppUser | null>(null)
   const [token, setTokenState] = useState<string | null>(null)
+  // Initialise from the class the anti-FOUC script already set on <html>.
+  const [theme, setThemeState] = useState<Theme>(() =>
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+      ? 'dark'
+      : 'light'
+  )
+
+  const toggleTheme = useCallback(() => {
+    setThemeState(prev => {
+      const next: Theme = prev === 'dark' ? 'light' : 'dark'
+      document.documentElement.classList.toggle('dark', next === 'dark')
+      localStorage.setItem('qa-theme', next)
+      return next
+    })
+  }, [])
 
   const setToken = useCallback((t: string | null) => {
     setTokenState(t)
@@ -105,11 +131,12 @@ function App() {
   }, [logout])
 
   return (
-    <UserContext.Provider value={{ user, setUser, token, setToken, logout }}>
+    <UserContext.Provider value={{ user, setUser, token, setToken, logout, theme, toggleTheme }}>
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Landing />} />
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="dashboard/:repoId" element={<ProjectDashboard />} />
           <Route path="workspace" element={<Workspace />} />
           <Route path="results" element={<TestResults />} />
         </Route>
@@ -119,5 +146,5 @@ function App() {
   )
 }
 
-export { UserContext, useUser }
+export { UserContext, useUser, useTheme }
 export default App

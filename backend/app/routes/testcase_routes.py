@@ -7,7 +7,7 @@ from app.models.models import TestCase, Repository, User
 from app.core.database import get_db
 from app.core.security import get_current_user, require_github_token
 from app.services.github_service import get_github_file, get_github_repo_tree
-from app.services.ai_service import generate_test_cases, is_useful_file
+from app.services.ai_service import generate_test_cases, select_source_files
 
 router = APIRouter(prefix="/api/test-cases", tags=["test-cases"])
 
@@ -65,7 +65,7 @@ async def generate_test_cases_endpoint(
 
     # Gather source files from GitHub.
     tree = await get_github_repo_tree(token, repo.owner, repo.name, body.branch)
-    useful_files = [f for f in tree if is_useful_file(f["path"])][:25]
+    useful_files = select_source_files(tree, limit=25)
 
     file_contents = []
     for f in useful_files:

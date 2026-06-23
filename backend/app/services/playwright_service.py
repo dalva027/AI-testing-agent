@@ -83,13 +83,18 @@ high-signal assertions is better than many brittle ones. Follow these strictly:
 - Do NOT hard-code prices, phone numbers, counts, or marketing copy you are not certain about. Assert on stable, structural things: headings, roles, nav links, key labels.
 - Only assert visibility for elements actually rendered at the default desktop viewport (~1280px). Elements behind a mobile/hamburger menu are hidden on desktop — open the menu first or skip them.
 - STRICT-MODE SAFETY (most common failure): a locator that matches more than one element makes Playwright throw. These are simple smoke tests, so append `.first()` to EVERY locator you assert on or click — e.g. `await expect(page.getByRole('link', { name: /get a free quote/i }).first()).toBeVisible()`. For navigation, additionally scope to the region and pass `exact: true` (e.g. `page.locator('nav').getByRole('link', { name: 'Services', exact: true }).first()`).
+- FORM FIELDS need the SAME strict-mode care, and `.fill()`/`.click()` do NOT accept `.first()` chaining cleanly on ambiguous matches — they throw first. `getByLabel` does a SUBSTRING match, so `getByLabel('Password')` also matches "Confirm Password". For inputs, prefer the most specific locator available in the source: `page.locator('#password')` / `page.getByLabel('Password', { exact: true })` over a bare label. Distinguish "Password" from "Confirm Password" explicitly.
 - Do NOT assume the order, position, or count of list/grid items. Never assert that a specific card/item is the "first" or "last". Only reference an item by text you can SEE verbatim in the source above; if you cannot confirm the exact text, assert structurally instead (e.g. that at least one card/heading of that type is visible).
+- HUMAN-READABLE MESSAGES are unstable copy — this applies to BOTH UI toasts AND API JSON `message`/`error` fields. Never assert their exact words unless the string appears VERBATIM in the source above ("Login successful" vs "Login successful!" vs "Logged in successfully!" all differ). For a toast, assert the element becomes visible (e.g. `await expect(page.locator('#toast, .toast').first()).toBeVisible()`). For an API call, assert `expect(resp.ok()).toBeTruthy()` / `expect(resp.status()).toBe(201)` and structural fields (e.g. `expect(json.user.email).toBe(...)`), NOT `json.message`.
+- MULTI-STEP / STATEFUL FLOWS (auth, cart, checkout, logout): the app starts with NO session — you must establish prerequisites IN THE TEST. To test logout, log in first; to test checkout or the cart page, add an item to the cart first; do not assume a logged-in user or a populated cart exists. Pages often guard on state (an empty cart redirects /checkout.html -> /cart.html), so seed the state before asserting.
+- SESSION COOKIES: to seed state you MUST use `page.request` (e.g. `await page.request.post('/api/cart', { data: { productId: 1 } })`), NOT the standalone `request` test fixture. `page.request` shares the browser context's cookie jar with `page`, so the session you create is the same one `page.goto(...)` then sees. The `request` fixture has a SEPARATE cookie jar — state seeded through it is invisible to the page and the guard will still fire. Only use credentials/payloads/ids that appear in the source above.
 - Only assert that a button/link exists if its label or href appears in the source above. To verify navigation, click it and assert `await expect(page).toHaveURL(/\\/route/)` rather than re-checking exact button text.
 - Keep it to one focused `test(...)` block. Do not invent routes or selectors not supported by the source above.
 - Return ONLY the JavaScript code inside a code block. No extra text.
 """
 
-    text = await call_ai(prompt, temperature=0.0)
+    # Reasoning tokens + the full script must fit; 4k truncated mid-script.
+    text = await call_ai(prompt, temperature=0.0, max_tokens=12288)
 
     # Extract JS from a code block when present.
     if "```javascript" in text:
