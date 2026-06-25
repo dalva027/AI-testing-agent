@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+﻿import { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
 import {
   Sparkles,
@@ -50,6 +50,9 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
   const [generating, setGenerating] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [executionModalOpen, setExecutionModalOpen] = useState(false)
+  // When set, the execution modal runs only this single test case (auto-started),
+  // independent of the checkbox selection used by "Run Selected".
+  const [singleRunId, setSingleRunId] = useState<number | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [highlightId, setHighlightId] = useState<number | null>(null)
 
@@ -113,6 +116,23 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
       setGenerating(false)
     }
   }
+
+  // Open the execution modal scoped to a single test case (from the expanded row).
+  const runSingleTest = (id: number) => {
+    setSingleRunId(id)
+    setExecutionModalOpen(true)
+  }
+
+  // Tests handed to the modal: just the single-run target when set, otherwise the
+  // checkbox selection. Memoised so the modal's init effect doesn't re-fire (and
+  // restart a run) on unrelated re-renders.
+  const modalTestCases = useMemo(
+    () =>
+      singleRunId != null
+        ? testCases.filter(tc => tc.id === singleRunId)
+        : testCases.filter(tc => selectedIds.has(tc.id)),
+    [testCases, selectedIds, singleRunId]
+  )
 
   const toggleSelect = (id: number) => {
     setSelectedIds(prev => {
@@ -245,7 +265,13 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
-                  {expandedId === tc.id ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                  <button
+                    onClick={() => setExpandedId(expandedId === tc.id ? null : tc.id)}
+                    aria-label={expandedId === tc.id ? 'Collapse' : 'Expand'}
+                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    {expandedId === tc.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
 
@@ -300,35 +326,54 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
                       View Session <ExternalLink className="w-3 h-3" />
                     </a>
                   )}
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => runSingleTest(tc.id)}
+                      className="btn-primary inline-flex items-center gap-2 text-sm"
+                    >
+                      <Play className="w-4 h-4" />
+                      Run Test
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
           ))}
 
-          {/* Run Bar */}
-          {selectedIds.size > 0 && (
-            <div className="bg-gray-900 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="text-white text-sm">
-                <span className="font-medium">{selectedIds.size}</span> test case{selectedIds.size > 1 ? 's' : ''} selected
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setExecutionModalOpen(true)}
-                  className="btn-primary inline-flex items-center gap-2"
-                >
-                  <Play className="w-4 h-4" />
-                  Run Selected
-                </button>
-              </div>
+        </div>
+      )}
+
+      {/* Floating Run Bar — stays visible without scrolling to the bottom */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] max-w-md">
+          <div className="bg-gray-900 rounded-2xl shadow-2xl ring-1 ring-white/10 p-3 pl-5 flex items-center justify-between gap-4">
+            <div className="text-white text-sm whitespace-nowrap">
+              <span className="font-semibold">{selectedIds.size}</span> test case{selectedIds.size > 1 ? 's' : ''} selected
             </div>
-          )}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="text-xs text-gray-400 hover:text-white transition-colors"
+              >
+                Clear
+              </button>
+              <button
+                onClick={() => { setSingleRunId(null); setExecutionModalOpen(true) }}
+                className="btn-primary inline-flex items-center gap-2"
+              >
+                <Play className="w-4 h-4" />
+                Run Selected
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       <TestCaseExecutionModal
         isOpen={executionModalOpen}
-        onClose={() => { setExecutionModalOpen(false); onReload() }}
-        testCases={testCases.filter(tc => selectedIds.has(tc.id))}
+        onClose={() => { setExecutionModalOpen(false); setSingleRunId(null); fetchTestCases(); onReload() }}
+        testCases={modalTestCases}
+        autoStart={singleRunId != null}
         repository={{ target_domain: targetDomain, global_instruction: globalInstruction }}
         repoId={repoId}
       />

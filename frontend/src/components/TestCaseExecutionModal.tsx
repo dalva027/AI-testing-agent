@@ -43,6 +43,8 @@ interface Props {
   testCases: TestCase[]
   repository: Repo
   repoId: number
+  // Begin executing immediately on open (used for single-test "Run Test").
+  autoStart?: boolean
 }
 
 type RunResult = {
@@ -55,7 +57,7 @@ type RunResult = {
   duration_ms?: number
 }
 
-export default function TestCaseExecutionModal({ isOpen, onClose, testCases, repository }: Props) {
+export default function TestCaseExecutionModal({ isOpen, onClose, testCases, repository, autoStart = false }: Props) {
   const [baseUrl, setBaseUrl] = useState(repository.target_domain || 'http://localhost:5173')
   const [currentIdx, setCurrentIdx] = useState(-1)
   const [isExecuting, setIsExecuting] = useState(false)
@@ -80,11 +82,13 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
       })
       setResults(initial)
       setSelectedDetail(testCases[0]?.id ?? null)
-      setCurrentIdx(-1)
-      setIsExecuting(false)
       setBaseUrl(repository.target_domain || 'http://localhost:5173')
+      // Auto-start kicks off sequential execution from the first test case;
+      // otherwise wait for the user to press "Run All".
+      setCurrentIdx(autoStart ? 0 : -1)
+      setIsExecuting(autoStart)
     }
-  }, [isOpen, testCases, repository])
+  }, [isOpen, testCases, repository, autoStart])
 
   // Sequential execution
   useEffect(() => {

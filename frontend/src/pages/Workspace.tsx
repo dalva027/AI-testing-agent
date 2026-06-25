@@ -267,11 +267,12 @@ export default function Workspace() {
                 {selectedRepo?.id === repo.id && (
                   <div className="border-t border-gray-100 p-5 bg-gray-50/50 space-y-5">
                     {/* Stats */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                       {[
                         { label: 'Total Tests', value: stats?.total_tests ?? 0, color: 'text-gray-900' },
                         { label: 'Passed', value: stats?.passed_tests ?? 0, color: 'text-emerald-600' },
                         { label: 'Failed', value: stats?.failed_tests ?? 0, color: 'text-rose-600' },
+                        { label: 'Pending', value: stats?.pending_tests ?? 0, color: 'text-amber-600' },
                         { label: 'Pass Rate', value: `${stats?.pass_rate ?? 0}%`, color: 'text-primary-600' },
                       ].map((stat, i) => (
                         <div key={i} className="bg-white rounded-lg border border-gray-200 p-3 text-center">
