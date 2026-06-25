@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from 'react'
+﻿import { useState, useEffect, useMemo, useCallback } from 'react'
 import axios from 'axios'
 import {
   BarChart3,
@@ -10,9 +10,11 @@ import {
   TrendingUp,
   ListChecks,
   Filter,
+  Github,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { TrendChart, StackedBarChart, DonutChart } from '../components/Charts'
+import { useUser } from '../App'
 
 // Each AI test-case generation costs this many credits (mirrors the backend).
 const GENERATION_COST = 200
@@ -45,12 +47,17 @@ interface TestCase {
 }
 
 export default function TestResults() {
+  const { token } = useUser()
   const [testCases, setTestCases] = useState<TestCase[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'passed' | 'failed' | 'pending'>('all')
   const [stats, setStats] = useState({ total: 0, passed: 0, failed: 0, pending: 0, passRate: 0 })
 
-  const fetchResults = async () => {
+  const fetchResults = useCallback(async () => {
+    if (!token) {
+      setLoading(false)
+      return
+    }
     setLoading(true)
     try {
       const res = await axios.get('/api/test-cases/all')
@@ -72,11 +79,11 @@ export default function TestResults() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [token])
 
   useEffect(() => {
     fetchResults()
-  }, [])
+  }, [fetchResults])
 
   const filtered = testCases.filter(tc => {
     if (filter === 'passed') return tc.status === 'passed'
@@ -150,6 +157,25 @@ export default function TestResults() {
     form: 'bg-amber-100 text-amber-800',
     integration: 'bg-indigo-100 text-indigo-800',
     'edge-case': 'bg-rose-100 text-rose-800',
+  }
+
+  // ---- Not authenticated ----
+  if (!token) {
+    return (
+      <div className="card p-12 text-center max-w-xl mx-auto mt-10">
+        <div className="w-14 h-14 bg-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-5">
+          <Github className="w-7 h-7 text-white" />
+        </div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Connect GitHub to get started</h2>
+        <p className="text-gray-500 mb-6">
+          Test results are tracked per account. Connect a GitHub account to view your test executions.
+        </p>
+        <a href="/api/auth/github/login" className="btn-primary inline-flex items-center gap-2">
+          <Github className="w-4 h-4" />
+          Connect GitHub
+        </a>
+      </div>
+    )
   }
 
   return (

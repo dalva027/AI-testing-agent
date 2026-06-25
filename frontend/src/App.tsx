@@ -130,6 +130,35 @@ function App() {
     return () => axios.interceptors.response.eject(interceptor)
   }, [logout])
 
+  // Keep the session alive without frequent re-logins. Whenever the user returns
+  // to the tab (focus/visibility) — and periodically while it stays open — swap
+  // the still-valid token for a fresh one so its expiry slides forward. If the
+  // token has already expired the request 401s and the interceptor above logs out.
+  useEffect(() => {
+    if (!token) return
+    let inFlight = false
+    const slide = async () => {
+      if (inFlight || document.visibilityState !== 'visible') return
+      inFlight = true
+      try {
+        const res = await axios.post('/api/auth/refresh')
+        if (res.data?.access_token) setToken(res.data.access_token)
+      } catch {
+        /* expired/invalid tokens are handled by the 401 interceptor */
+      } finally {
+        inFlight = false
+      }
+    }
+    window.addEventListener('focus', slide)
+    document.addEventListener('visibilitychange', slide)
+    const interval = window.setInterval(slide, 15 * 60 * 1000)
+    return () => {
+      window.removeEventListener('focus', slide)
+      document.removeEventListener('visibilitychange', slide)
+      window.clearInterval(interval)
+    }
+  }, [token, setToken])
+
   return (
     <UserContext.Provider value={{ user, setUser, token, setToken, logout, theme, toggleTheme }}>
       <Routes>

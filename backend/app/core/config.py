@@ -28,7 +28,9 @@ class Settings(BaseSettings):
     # Auth
     SECRET_KEY: str = "change-me-to-a-real-secret-key"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    # 8h base lifetime; the frontend slides this forward on activity via
+    # /api/auth/refresh, so active users are not forced to re-login mid-session.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
 
     # CORS
     ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000"

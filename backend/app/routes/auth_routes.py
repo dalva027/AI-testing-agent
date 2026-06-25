@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas.schemas import UserOut
+from app.schemas.schemas import UserOut, Token
 from app.models.models import User
 from app.core.database import get_db
 from app.core.config import get_settings
@@ -106,3 +106,11 @@ async def github_callback(
 async def get_me(current_user: User = Depends(get_current_user)):
     """Return the currently authenticated user."""
     return current_user
+
+
+@router.post("/refresh", response_model=Token)
+async def refresh_token(current_user: User = Depends(get_current_user)):
+    """Slide the session forward: mint a fresh app token for an already
+    authenticated user. Requires a still-valid token (enforced by
+    get_current_user), so an expired session cannot be silently revived."""
+    return Token(access_token=create_access_token(current_user.id), token_type="bearer")
