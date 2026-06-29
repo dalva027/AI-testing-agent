@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.schemas import TestRunOut, TestRunRequest
@@ -10,6 +10,26 @@ from app.services.playwright_service import generate_playwright_script, run_play
 from app.services.github_service import get_github_file
 
 router = APIRouter(prefix="/api/test-cases/run", tags=["test-execution"])
+
+# Credits charged per individual test run (each run (re)generates and executes a
+# Playwright script). Mirrored on the frontend.
+RUN_COST = 3
+
+
+async def _refund_run(db: AsyncSession, user_id: int) -> int | None:
+    """Give back the RUN_COST credits charged for a run that produced no script.
+
+    Returns the user's new balance, or None if the user row vanished.
+    """
+    res = await db.execute(
+        update(User)
+        .where(User.id == user_id)
+        .values(credits=User.credits + RUN_COST)
+        .returning(User.credits)
+    )
+    row = res.first()
+    await db.commit()
+    return row[0] if row else None
 
 
 @router.post("")
@@ -22,6 +42,7 @@ async def run_test_cases(
     """Generate Playwright scripts and execute tests in a real browser."""
     results = []
     access_token = current_user.github_access_token
+    remaining_credits = current_user.credits
 
     for tc_id in body.test_case_ids:
         result = await db.execute(
@@ -30,6 +51,26 @@ async def run_test_cases(
         tc = result.scalar_one_or_none()
         if not tc:
             continue
+
+        # Charge per test run up front (atomic conditional decrement, so concurrent
+        # runs can't overspend). Refunded below if we can't produce a script to run.
+        charged = await db.execute(
+            update(User)
+            .where(User.id == current_user.id, User.credits >= RUN_COST)
+            .values(credits=User.credits - RUN_COST)
+            .returning(User.credits)
+        )
+        charged_row = charged.first()
+        await db.commit()
+        if charged_row is None:
+            results.append({
+                "test_case_id": tc_id,
+                "status": "failed",
+                "logs": [f"[SYSTEM ERROR] Insufficient credits. Each test run costs {RUN_COST} credits."],
+                "error": "Insufficient credits",
+            })
+            continue
+        remaining_credits = charged_row[0]
 
         # Fetch repo for global instruction (only when the test case is linked to one).
         global_instruction = None
@@ -69,6 +110,7 @@ async def run_test_cases(
                     base_url=body.base_url,
                 )
             except RuntimeError as e:
+                remaining_credits = await _refund_run(db, current_user.id) or remaining_credits
                 results.append({
                     "test_case_id": tc_id,
                     "status": "failed",
@@ -77,6 +119,7 @@ async def run_test_cases(
                 })
                 continue
             if not script:
+                remaining_credits = await _refund_run(db, current_user.id) or remaining_credits
                 results.append({
                     "test_case_id": tc_id,
                     "status": "failed",
@@ -118,7 +161,7 @@ async def run_test_cases(
             "duration_ms": exec_result["duration_ms"],
         })
 
-    return {"results": results}
+    return {"results": results, "credits": remaining_credits}
 
 
 @router.get("/runs/{test_case_id}", response_model=list[TestRunOut])

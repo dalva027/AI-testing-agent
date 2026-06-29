@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react'
+﻿import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import {
   X,
@@ -12,7 +12,24 @@ import {
   ChevronDown,
   ChevronUp,
   RotateCcw,
+  Copy,
+  AlertTriangle,
 } from 'lucide-react'
+import toast from 'react-hot-toast'
+
+const DEFAULT_BASE_URL = 'http://localhost:5173'
+// Credits charged per test run (mirrors backend RUN_COST).
+const RUN_COST = 3
+
+// True only for a syntactically valid http(s) URL (after trimming whitespace).
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const u = new URL(value.trim())
+    return u.protocol === 'http:' || u.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
 
 interface TestCase {
   id: number
@@ -45,6 +62,10 @@ interface Props {
   repoId: number
   // Begin executing immediately on open (used for single-test "Run Test").
   autoStart?: boolean
+  // Fired once when a batch finishes, for a completion toast in the parent.
+  onComplete?: (summary: { passed: number; failed: number; total: number; durationMs: number }) => void
+  // Called with the user's new credit balance after a run charges credits.
+  onCreditsChange?: (credits: number) => void
 }
 
 type RunResult = {
@@ -57,8 +78,8 @@ type RunResult = {
   duration_ms?: number
 }
 
-export default function TestCaseExecutionModal({ isOpen, onClose, testCases, repository, autoStart = false }: Props) {
-  const [baseUrl, setBaseUrl] = useState(repository.target_domain || 'http://localhost:5173')
+export default function TestCaseExecutionModal({ isOpen, onClose, testCases, repository, autoStart = false, onComplete, onCreditsChange }: Props) {
+  const [baseUrl, setBaseUrl] = useState(repository.target_domain || DEFAULT_BASE_URL)
   const [currentIdx, setCurrentIdx] = useState(-1)
   const [isExecuting, setIsExecuting] = useState(false)
   const [results, setResults] = useState<Record<number, RunResult>>({})
@@ -66,28 +87,46 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
   const [executionMode, setExecutionMode] = useState<'cache' | 'generate'>('generate')
   const [customPrompt, setCustomPrompt] = useState('')
   const [showOptions, setShowOptions] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
+  const [batchDone, setBatchDone] = useState(false)
+  const consoleRef = useRef<HTMLDivElement>(null)
+  const ranRef = useRef(false)
+  const openedRef = useRef(false)
 
+  // Initialise exactly once per open. Without the openedRef guard, any parent
+  // re-render that changes a prop reference (the inline `repository` object, or a
+  // `setUser` triggered by a credit update during the run) would re-run this and
+  // reset an in-flight/finished run back to 'idle' with an empty console.
   useEffect(() => {
-    if (isOpen && testCases.length > 0) {
-      const initial: Record<number, RunResult> = {}
-      testCases.forEach(tc => {
-        initial[tc.id] = {
-          testCaseId: tc.id,
-          status: tc.status === 'passed' || tc.status === 'failed' ? tc.status : 'idle',
-          logs: tc.logs || ['Waiting to run...'],
-          playwrightScript: tc.playwright_script || undefined,
-          sessionUrl: tc.session_url || undefined,
-          duration_ms: tc.duration_ms || undefined,
-        }
-      })
-      setResults(initial)
-      setSelectedDetail(testCases[0]?.id ?? null)
-      setBaseUrl(repository.target_domain || 'http://localhost:5173')
-      // Auto-start kicks off sequential execution from the first test case;
-      // otherwise wait for the user to press "Run All".
-      setCurrentIdx(autoStart ? 0 : -1)
-      setIsExecuting(autoStart)
+    if (!isOpen) {
+      openedRef.current = false
+      return
     }
+    if (openedRef.current || testCases.length === 0) return
+    openedRef.current = true
+
+    const initial: Record<number, RunResult> = {}
+    testCases.forEach(tc => {
+      initial[tc.id] = {
+        testCaseId: tc.id,
+        status: tc.status === 'passed' || tc.status === 'failed' ? tc.status : 'idle',
+        logs: tc.logs || ['Waiting to run...'],
+        playwrightScript: tc.playwright_script || undefined,
+        sessionUrl: tc.session_url || undefined,
+        duration_ms: tc.duration_ms || undefined,
+      }
+    })
+    setResults(initial)
+    setSelectedDetail(testCases[0]?.id ?? null)
+    const resolvedUrl = repository.target_domain || DEFAULT_BASE_URL
+    setBaseUrl(resolvedUrl)
+    setBatchDone(false)
+    ranRef.current = false
+    // Auto-start kicks off execution from the first test case — but only if the
+    // target URL is valid; otherwise wait for the user to fix it and press Run.
+    const canAutoStart = autoStart && isValidHttpUrl(resolvedUrl)
+    setCurrentIdx(canAutoStart ? 0 : -1)
+    setIsExecuting(canAutoStart)
   }, [isOpen, testCases, repository, autoStart])
 
   // Sequential execution
@@ -119,11 +158,12 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
       try {
         const res = await axios.post('/api/test-cases/run', {
           test_case_ids: [tc.id],
-          base_url: baseUrl,
+          base_url: baseUrl.trim(),
           mode: executionMode,
           custom_prompt: customPrompt || undefined,
         })
 
+        if (typeof res.data.credits === 'number') onCreditsChange?.(res.data.credits)
         const result = res.data.results?.[0]
         if (result) {
           setResults(prev => ({
@@ -157,15 +197,40 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
     runTest()
   }, [isExecuting, currentIdx, testCases, baseUrl, executionMode, customPrompt])
 
+  // Elapsed-time counter for the currently running test (resets per test).
+  useEffect(() => {
+    if (!isExecuting) {
+      setElapsed(0)
+      return
+    }
+    setElapsed(0)
+    const t = window.setInterval(() => setElapsed(e => e + 1), 1000)
+    return () => window.clearInterval(t)
+  }, [isExecuting, currentIdx])
+
+  // Remember that a real run happened, so the completion banner/toast only fire
+  // after an actual run (not when reopening a modal of already-run tests).
+  useEffect(() => {
+    if (isExecuting) ranRef.current = true
+  }, [isExecuting])
+
+  // Keep the console pinned to the newest log line.
+  useEffect(() => {
+    const el = consoleRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [results, selectedDetail])
+
   const handleStart = () => {
-    if (testCases.length === 0) return
+    if (testCases.length === 0 || !isValidHttpUrl(baseUrl)) return
+    setBatchDone(false)
     setCurrentIdx(0)
     setIsExecuting(true)
   }
 
   // Reset prior results to idle and run the whole selected batch again.
   const handleRunAgain = () => {
-    if (testCases.length === 0) return
+    if (testCases.length === 0 || !isValidHttpUrl(baseUrl)) return
+    setBatchDone(false)
     const reset: Record<number, RunResult> = {}
     testCases.forEach(tc => {
       reset[tc.id] = {
@@ -191,10 +256,44 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
     return r && r.status !== 'idle' && r.status !== 'generating' && r.status !== 'running'
   })
 
+  // When a real run reaches allDone, surface a summary banner + parent toast once.
+  useEffect(() => {
+    if (!allDone || !ranRef.current) return
+    ranRef.current = false
+    setBatchDone(true)
+    const rs = testCases.map(tc => results[tc.id]).filter(Boolean) as RunResult[]
+    onComplete?.({
+      passed: rs.filter(r => r.status === 'passed').length,
+      failed: rs.filter(r => r.status === 'failed').length,
+      total: testCases.length,
+      durationMs: rs.reduce((acc, r) => acc + (r.duration_ms || 0), 0),
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allDone])
+
   if (!isOpen) return null
 
   const currentResult = selectedDetail ? results[selectedDetail] : null
   const currentTestCase = testCases.find(tc => tc.id === selectedDetail)
+  const baseUrlValid = isValidHttpUrl(baseUrl)
+  const isLocalhostDefault = baseUrl.trim() === DEFAULT_BASE_URL
+
+  const summary = (() => {
+    const rs = testCases.map(tc => results[tc.id]).filter(Boolean) as RunResult[]
+    return {
+      passed: rs.filter(r => r.status === 'passed').length,
+      failed: rs.filter(r => r.status === 'failed').length,
+      durationMs: rs.reduce((acc, r) => acc + (r.duration_ms || 0), 0),
+    }
+  })()
+
+  const copyLogs = () => {
+    const text = (currentResult?.logs || []).join('\n')
+    if (!text) return
+    navigator.clipboard?.writeText(text)
+      .then(() => toast.success('Logs copied'))
+      .catch(() => toast.error('Copy failed'))
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -206,11 +305,30 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
             <p className="text-sm text-gray-500 mt-0.5">
               {testCases.length} test case{testCases.length > 1 ? 's' : ''} • {baseUrl}
             </p>
+            {isLocalhostDefault && (
+              <p className="text-xs text-amber-600 mt-1 inline-flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                Targeting default localhost — set the repo's target domain if your app runs elsewhere.
+              </p>
+            )}
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+          <button onClick={onClose} aria-label="Close" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
+
+        {batchDone && (
+          <div className="px-5 py-3 border-b border-gray-200 bg-gray-50 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm shrink-0">
+            <span className="font-medium text-gray-900">Run complete</span>
+            <span className="inline-flex items-center gap-1 text-emerald-600">
+              <CheckCircle2 className="w-4 h-4" /> {summary.passed} passed
+            </span>
+            <span className="inline-flex items-center gap-1 text-rose-600">
+              <XCircle className="w-4 h-4" /> {summary.failed} failed
+            </span>
+            <span className="text-gray-500">{Math.round(summary.durationMs)}ms total</span>
+          </div>
+        )}
 
         <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
           {/* Left Panel - Queue */}
@@ -219,7 +337,11 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
             <div className="p-4 border-b border-gray-100 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-700">Base URL</span>
-                <button onClick={() => setShowOptions(!showOptions)} className="text-sm text-primary-600 hover:text-primary-700">
+                <button
+                  onClick={() => setShowOptions(!showOptions)}
+                  aria-label={showOptions ? 'Hide options' : 'Show options'}
+                  className="text-sm text-primary-600 hover:text-primary-700"
+                >
                   {showOptions ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                 </button>
               </div>
@@ -227,9 +349,13 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
                 type="text"
                 value={baseUrl}
                 onChange={e => setBaseUrl(e.target.value)}
-                className="input text-sm font-mono"
+                className={`input text-sm font-mono ${!baseUrlValid ? 'border-rose-400 focus:ring-rose-500' : ''}`}
                 placeholder="http://localhost:5173"
               />
+              {!baseUrlValid && (
+                <p className="text-xs text-rose-600">Enter a valid URL starting with http:// or https://</p>
+              )}
+              <p className="text-xs text-gray-500">Each test run costs {RUN_COST} credits.</p>
               {showOptions && (
                 <div className="space-y-3">
                   <div>
@@ -319,7 +445,7 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
             <div className="p-4 border-t border-gray-200 flex items-center gap-3 shrink-0">
               {allDone ? (
                 <>
-                  <button onClick={handleRunAgain} className="btn-primary flex-1 justify-center">
+                  <button onClick={handleRunAgain} disabled={!baseUrlValid} className="btn-primary flex-1 justify-center">
                     <RotateCcw className="w-4 h-4" />
                     Run Again
                   </button>
@@ -331,14 +457,14 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
               ) : isExecuting ? (
                 <>
                   <button onClick={handleStop} className="btn-secondary flex-1 justify-center">
-                    Stop
+                    Stop after current
                   </button>
                   <span className="text-xs text-gray-500">
-                    Running {currentIdx + 1}/{testCases.length}
+                    Running {currentIdx + 1}/{testCases.length} · {elapsed}s
                   </span>
                 </>
               ) : (
-                <button onClick={handleStart} className="btn-primary flex-1 justify-center">
+                <button onClick={handleStart} disabled={!baseUrlValid} className="btn-primary flex-1 justify-center">
                   <Play className="w-4 h-4" />
                   Run All
                 </button>
@@ -373,10 +499,19 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
                 </div>
 
                 {/* Console Output */}
-                <div className="flex-1 overflow-y-auto p-4 bg-gray-950">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Terminal className="w-3.5 h-3.5 text-gray-400" />
-                    <span className="text-xs font-semibold text-gray-400 uppercase">Console Output</span>
+                <div ref={consoleRef} className="flex-1 overflow-y-auto p-4 bg-gray-950">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Terminal className="w-3.5 h-3.5 text-gray-400" />
+                      <span className="text-xs font-semibold text-gray-400 uppercase">Console Output</span>
+                    </div>
+                    <button
+                      onClick={copyLogs}
+                      aria-label="Copy logs"
+                      className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-200 transition-colors"
+                    >
+                      <Copy className="w-3.5 h-3.5" /> Copy
+                    </button>
                   </div>
                   <div className="font-mono text-xs space-y-0.5">
                     {currentResult.logs.map((log, i) => (
@@ -395,7 +530,7 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
                     {isExecuting && currentIdx === testCases.findIndex(tc => tc.id === currentTestCase.id) && (
                       <div className="flex items-center gap-2 text-amber-400 animate-pulse">
                         <Loader2 className="w-3 h-3 animate-spin" />
-                        <span>Executing...</span>
+                        <span>Executing… {elapsed}s</span>
                       </div>
                     )}
                   </div>

@@ -169,7 +169,7 @@ export default function ProjectDashboard() {
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <button onClick={fetchData} className="btn-secondary inline-flex items-center gap-2">
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
           <Link
@@ -224,7 +224,7 @@ export default function ProjectDashboard() {
                 <Activity className="w-4 h-4 text-gray-400" />
                 <h3 className="font-semibold text-gray-900">Recent Test Cases</h3>
                 <Link
-                  to="/results"
+                  to={`/workspace?repo=${repo.id}`}
                   className="ml-auto text-sm text-primary-600 hover:text-primary-700 inline-flex items-center gap-1"
                 >
                   View all <ArrowRight className="w-3.5 h-3.5" />

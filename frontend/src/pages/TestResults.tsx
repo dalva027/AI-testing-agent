@@ -1,4 +1,5 @@
 ﻿import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import {
   BarChart3,
@@ -11,6 +12,8 @@ import {
   ListChecks,
   Filter,
   Github,
+  Download,
+  FolderGit2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { TrendChart, StackedBarChart, DonutChart } from '../components/Charts'
@@ -33,8 +36,21 @@ function dayKey(iso: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+// Trigger a client-side file download of in-memory content (no backend call).
+function downloadFile(content: string, mime: string, filename: string) {
+  const blob = new Blob([content], { type: mime })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 interface TestCase {
   id: number
+  repo_id: number | null
+  repo_name: string
   title: string
   description: string
   test_type: string
@@ -48,10 +64,12 @@ interface TestCase {
 
 export default function TestResults() {
   const { token } = useUser()
+  const navigate = useNavigate()
   const [testCases, setTestCases] = useState<TestCase[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'passed' | 'failed' | 'pending'>('all')
-  const [stats, setStats] = useState({ total: 0, passed: 0, failed: 0, pending: 0, passRate: 0 })
+  // Selected project (repo id) that scopes the whole page, or 'all'.
+  const [selectedProject, setSelectedProject] = useState<number | 'all'>('all')
 
   const fetchResults = useCallback(async () => {
     if (!token) {
@@ -62,18 +80,6 @@ export default function TestResults() {
     try {
       const res = await axios.get('/api/test-cases/all')
       setTestCases(res.data)
-
-      const total = res.data.length
-      const passed = res.data.filter((tc: TestCase) => tc.status === 'passed').length
-      const failed = res.data.filter((tc: TestCase) => tc.status === 'failed').length
-      const pending = total - passed - failed
-      setStats({
-        total,
-        passed,
-        failed,
-        pending,
-        passRate: total > 0 ? Math.round((passed / total) * 100) : 0,
-      })
     } catch {
       toast.error('Failed to load test results')
     } finally {
@@ -85,7 +91,42 @@ export default function TestResults() {
     fetchResults()
   }, [fetchResults])
 
-  const filtered = testCases.filter(tc => {
+  // Distinct projects present in the results, for the project selector.
+  const projects = useMemo(() => {
+    const map = new Map<number, string>()
+    testCases.forEach(tc => {
+      if (tc.repo_id != null) map.set(tc.repo_id, tc.repo_name)
+    })
+    return [...map.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [testCases])
+
+  // If the selected project disappears (e.g. after a refresh), fall back to All.
+  useEffect(() => {
+    if (selectedProject !== 'all' && !projects.some(p => p.id === selectedProject)) {
+      setSelectedProject('all')
+    }
+  }, [projects, selectedProject])
+
+  // Everything below (stats, charts, table, export) is scoped to this set.
+  const scoped = useMemo(
+    () => (selectedProject === 'all' ? testCases : testCases.filter(tc => tc.repo_id === selectedProject)),
+    [testCases, selectedProject]
+  )
+
+  const stats = useMemo(() => {
+    const total = scoped.length
+    const passed = scoped.filter(tc => tc.status === 'passed').length
+    const failed = scoped.filter(tc => tc.status === 'failed').length
+    const pending = total - passed - failed
+    return { total, passed, failed, pending, passRate: total > 0 ? Math.round((passed / total) * 100) : 0 }
+  }, [scoped])
+
+  const selectedProjectName =
+    selectedProject === 'all' ? null : projects.find(p => p.id === selectedProject)?.name ?? null
+
+  const filtered = scoped.filter(tc => {
     if (filter === 'passed') return tc.status === 'passed'
     if (filter === 'failed') return tc.status === 'failed'
     if (filter === 'pending') return tc.status === 'generated'
@@ -98,7 +139,7 @@ export default function TestResults() {
       string,
       { passed: number; failed: number; generations: Set<string> }
     >()
-    for (const tc of testCases) {
+    for (const tc of scoped) {
       if (!tc.created_at) continue
       const key = dayKey(tc.created_at)
       let entry = byDay.get(key)
@@ -139,7 +180,7 @@ export default function TestResults() {
     // The AI sometimes emits compound types ("ui|integration"); bucket each test
     // by its primary type so coverage slices stay clean, colored, and sum to total.
     const typeCount = new Map<string, number>()
-    for (const tc of testCases) {
+    for (const tc of scoped) {
       const primary = (tc.test_type || 'other').split('|')[0].trim() || 'other'
       typeCount.set(primary, (typeCount.get(primary) || 0) + 1)
     }
@@ -148,7 +189,7 @@ export default function TestResults() {
       .map(([type, value]) => ({ label: type, value, color: TYPE_HEX[type] || '#94a3b8' }))
 
     return { passRate, passedVsFailed, credits, coverage }
-  }, [testCases])
+  }, [scoped])
 
   const typeColors: Record<string, string> = {
     ui: 'bg-blue-100 text-blue-800',
@@ -157,6 +198,28 @@ export default function TestResults() {
     form: 'bg-amber-100 text-amber-800',
     integration: 'bg-indigo-100 text-indigo-800',
     'edge-case': 'bg-rose-100 text-rose-800',
+  }
+
+  const exportBaseName = selectedProjectName
+    ? `test-results-${selectedProjectName.replace(/[^a-z0-9]+/gi, '-')}`
+    : 'test-results'
+
+  const exportJson = () => {
+    downloadFile(JSON.stringify(scoped, null, 2), 'application/json', `${exportBaseName}.json`)
+  }
+
+  const exportCsv = () => {
+    const headers = ['id', 'project', 'title', 'type', 'priority', 'status', 'duration_ms', 'created_at']
+    const escape = (v: unknown) => {
+      const s = v == null ? '' : String(v)
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const rows = scoped.map(tc =>
+      [tc.id, tc.repo_name, tc.title, tc.test_type, tc.priority, tc.status, tc.duration_ms ?? '', tc.created_at]
+        .map(escape)
+        .join(',')
+    )
+    downloadFile([headers.join(','), ...rows].join('\n'), 'text/csv', `${exportBaseName}.csv`)
   }
 
   // ---- Not authenticated ----
@@ -184,13 +247,63 @@ export default function TestResults() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Test Results</h1>
-          <p className="text-gray-500 mt-1">Overview of all test executions across your repositories</p>
+          <p className="text-gray-500 mt-1">
+            {selectedProjectName
+              ? `Test executions for ${selectedProjectName}`
+              : 'Overview of test executions across your repositories'}
+          </p>
         </div>
-        <button onClick={fetchResults} className="btn-secondary inline-flex items-center gap-2 self-start">
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2 self-start">
+          <button
+            onClick={exportCsv}
+            disabled={scoped.length === 0}
+            title="Export results as CSV"
+            className="btn-secondary inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download className="w-4 h-4" />
+            CSV
+          </button>
+          <button
+            onClick={exportJson}
+            disabled={scoped.length === 0}
+            title="Export results as JSON"
+            className="btn-secondary inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download className="w-4 h-4" />
+            JSON
+          </button>
+          <button onClick={fetchResults} className="btn-secondary inline-flex items-center gap-2">
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {/* Project selector */}
+      {projects.length > 0 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <FolderGit2 className="w-4 h-4 text-gray-400 shrink-0" />
+          <button
+            onClick={() => setSelectedProject('all')}
+            className={`shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              selectedProject === 'all' ? 'bg-primary-100 text-primary-700' : 'text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            All Projects
+          </button>
+          {projects.map(p => (
+            <button
+              key={p.id}
+              onClick={() => setSelectedProject(p.id)}
+              className={`shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                selectedProject === p.id ? 'bg-primary-100 text-primary-700' : 'text-gray-500 hover:bg-gray-100'
+              }`}
+            >
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
@@ -216,7 +329,7 @@ export default function TestResults() {
       </div>
 
       {/* Charts */}
-      {!loading && testCases.length > 0 && (
+      {!loading && scoped.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="card p-5">
             <h3 className="font-semibold text-gray-900 mb-4">Pass rate over time</h3>
@@ -286,7 +399,9 @@ export default function TestResults() {
         <div className="card p-12 text-center">
           <BarChart3 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-xl font-semibold text-gray-900 mb-2">No Results Yet</h3>
-          <p className="text-gray-500">Run some test cases to see results here.</p>
+          <p className="text-gray-500">
+            {selectedProjectName ? `No results for ${selectedProjectName} yet.` : 'Run some test cases to see results here.'}
+          </p>
         </div>
       ) : (
         <div className="card overflow-hidden">
@@ -295,6 +410,9 @@ export default function TestResults() {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Test Case</th>
+                  {selectedProject === 'all' && (
+                    <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Project</th>
+                  )}
                   <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Type</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
                   <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Duration</th>
@@ -303,11 +421,19 @@ export default function TestResults() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filtered.map(tc => (
-                  <tr key={tc.id} className="hover:bg-gray-50 transition-colors">
+                  <tr
+                    key={tc.id}
+                    onClick={() => { if (tc.repo_id) navigate(`/workspace?repo=${tc.repo_id}&tc=${tc.id}`) }}
+                    title={tc.repo_id ? 'Open in workspace' : undefined}
+                    className={`transition-colors ${tc.repo_id ? 'hover:bg-gray-50 cursor-pointer' : ''}`}
+                  >
                     <td className="px-5 py-4">
                       <p className="font-medium text-gray-900 text-sm">{tc.title}</p>
                       <p className="text-xs text-gray-500 truncate max-w-xs">{tc.description}</p>
                     </td>
+                    {selectedProject === 'all' && (
+                      <td className="px-5 py-4 text-sm text-gray-600 whitespace-nowrap">{tc.repo_name}</td>
+                    )}
                     <td className="px-5 py-4">
                       <span className={`badge ${typeColors[tc.test_type] || 'badge-neutral'}`}>
                         {tc.test_type}

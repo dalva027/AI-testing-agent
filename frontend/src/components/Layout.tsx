@@ -61,9 +61,16 @@ export default function Layout() {
                 {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
               {user && (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
-                  <span className="text-xs font-medium text-amber-700">Credits:</span>
-                  <span className="text-sm font-bold text-amber-800">{user.credits}</span>
+                // Below one generation's worth (200 credits) the pill turns red as a
+                // low-balance cue; otherwise it stays amber.
+                <div
+                  title={user.credits < 200 ? 'Low balance — generating test cases costs 200 credits' : undefined}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
+                    user.credits < 200 ? 'bg-rose-50 border-rose-200' : 'bg-amber-50 border-amber-200'
+                  }`}
+                >
+                  <span className={`text-xs font-medium ${user.credits < 200 ? 'text-rose-700' : 'text-amber-700'}`}>Credits:</span>
+                  <span className={`text-sm font-bold ${user.credits < 200 ? 'text-rose-800' : 'text-amber-800'}`}>{user.credits}</span>
                 </div>
               )}
               {user ? (

@@ -4,6 +4,6 @@
   "version": "1.0.0",
   "description": "Isolated workspace where generated Playwright test specs are executed.",
   "devDependencies": {
-    "@playwright/test": "^1.49.0"
+    "@playwright/test": "1.61.0"
   }
 }

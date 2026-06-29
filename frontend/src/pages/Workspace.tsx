@@ -15,6 +15,7 @@ import {
 import { useUser } from '../App'
 import TestCaseList from '../components/TestCaseList'
 import RepoSettingsDialog from '../components/RepoSettingsDialog'
+import ConfirmDialog from '../components/ui/ConfirmDialog'
 import toast from 'react-hot-toast'
 
 interface Repo {
@@ -51,6 +52,8 @@ export default function Workspace() {
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null)
   const [githubLoading, setGithubLoading] = useState(false)
   const [statsLoading, setStatsLoading] = useState(false)
+  // Repo awaiting remove confirmation (null = dialog closed).
+  const [confirmRepo, setConfirmRepo] = useState<Repo | null>(null)
 
   const fetchRepos = useCallback(async () => {
     if (!token) {
@@ -113,8 +116,7 @@ export default function Workspace() {
     }
   }
 
-  const removeRepo = async (repoId: number) => {
-    if (!confirm('Remove this repository?')) return
+  const performRemoveRepo = async (repoId: number) => {
     try {
       await axios.delete(`/api/repos/${repoId}`)
       toast.success('Repository removed')
@@ -255,7 +257,8 @@ export default function Workspace() {
                       <ExternalLink className="w-4 h-4" />
                     </a>
                     <button
-                      onClick={e => { e.stopPropagation(); removeRepo(repo.id) }}
+                      onClick={e => { e.stopPropagation(); setConfirmRepo(repo) }}
+                      aria-label="Remove repository"
                       className="p-2 text-gray-400 hover:text-red-600 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -289,15 +292,23 @@ export default function Workspace() {
                     </div>
 
                     {/* Target Domain */}
-                    <div className="flex items-center gap-3 bg-white rounded-lg border border-gray-200 p-3">
-                      <Globe className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm text-gray-600">Target Domain:</span>
-                      <span className="text-sm font-mono font-medium text-primary-600 bg-primary-50 px-2 py-0.5 rounded">
-                        {repo.target_domain || 'http://localhost:5173'}
-                      </span>
-                      <div className="ml-auto">
-                        <RepoSettingsDialog repo={repo} onSaved={() => fetchRepos()} />
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-3 bg-white rounded-lg border border-gray-200 p-3">
+                        <Globe className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm text-gray-600">Target Domain:</span>
+                        <span className="text-sm font-mono font-medium text-primary-600 bg-primary-50 px-2 py-0.5 rounded">
+                          {repo.target_domain || 'http://localhost:5173'}
+                        </span>
+                        <div className="ml-auto">
+                          <RepoSettingsDialog repo={repo} onSaved={() => fetchRepos()} />
+                        </div>
                       </div>
+                      {(!repo.target_domain || repo.target_domain === 'http://localhost:5173') && (
+                        <p className="text-xs text-amber-600 inline-flex items-center gap-1">
+                          <Globe className="w-3 h-3" />
+                          Targeting localhost. If your app runs elsewhere, set a target domain so tests hit the right URL.
+                        </p>
+                      )}
                     </div>
 
                     {/* Test Case Actions */}
@@ -369,6 +380,16 @@ export default function Workspace() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmRepo !== null}
+        onOpenChange={open => { if (!open) setConfirmRepo(null) }}
+        title="Remove repository?"
+        description={confirmRepo ? `${confirmRepo.full_name} and its test cases will be removed from your workspace.` : undefined}
+        confirmLabel="Remove"
+        destructive
+        onConfirm={() => { if (confirmRepo) performRemoveRepo(confirmRepo.id) }}
+      />
     </div>
   )
 }

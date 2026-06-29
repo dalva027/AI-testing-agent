@@ -11,6 +11,8 @@ import {
   Plus,
   ArrowRight,
   GitBranch,
+  Circle,
+  X,
 } from 'lucide-react'
 import axios from 'axios'
 import toast from 'react-hot-toast'
@@ -72,6 +74,7 @@ export default function Dashboard() {
   const [repos, setRepos] = useState<Repo[]>([])
   const [testCases, setTestCases] = useState<TestCase[]>([])
   const [loading, setLoading] = useState(true)
+  const [gsDismissed, setGsDismissed] = useState(() => localStorage.getItem('qa-gs-dismissed') === '1')
 
   const fetchData = useCallback(async () => {
     if (!token) {
@@ -146,6 +149,23 @@ export default function Dashboard() {
     { label: 'Pass Rate', value: `${passRate}%`, icon: TrendingUp, color: 'text-primary-600', bg: 'bg-primary-50' },
   ]
 
+  // First-run checklist, derived from existing state (no extra requests).
+  const gettingStartedSteps = [
+    { label: 'Connect GitHub', done: !!token },
+    { label: 'Add a repository', done: repos.length > 0 },
+    {
+      label: 'Set a target domain (Workspace → repo settings)',
+      done: repos.some(r => !!r.target_domain && r.target_domain !== 'http://localhost:5173'),
+    },
+    { label: 'Generate test cases', done: testCases.length > 0 },
+    { label: 'Run a test', done: testCases.some(tc => tc.status === 'passed' || tc.status === 'failed') },
+  ]
+  const allStepsDone = gettingStartedSteps.every(s => s.done)
+  const dismissGettingStarted = () => {
+    setGsDismissed(true)
+    localStorage.setItem('qa-gs-dismissed', '1')
+  }
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -167,6 +187,34 @@ export default function Dashboard() {
           </Link>
         </div>
       </div>
+
+      {!loading && !gsDismissed && !allStepsDone && (
+        <div className="card p-5 relative">
+          <button
+            onClick={dismissGettingStarted}
+            aria-label="Dismiss getting started"
+            className="absolute top-3 right-3 p-1 text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+          <h3 className="font-semibold text-gray-900 mb-1">Getting started</h3>
+          <p className="text-sm text-gray-500 mb-4">
+            Follow these steps to run your first AI test. Generating test cases costs 200 credits.
+          </p>
+          <ol className="space-y-2">
+            {gettingStartedSteps.map((s, i) => (
+              <li key={i} className="flex items-center gap-2 text-sm">
+                {s.done ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                ) : (
+                  <Circle className="w-4 h-4 text-gray-300 shrink-0" />
+                )}
+                <span className={s.done ? 'text-gray-400 line-through' : 'text-gray-700'}>{s.label}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-24">
