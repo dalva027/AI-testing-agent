@@ -3,7 +3,7 @@ from functools import lru_cache
 
 
 class Settings(BaseSettings):
-    APP_NAME: str = "Testing Agent"
+    APP_NAME: str = "Qira - Testing Agent"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = True
 

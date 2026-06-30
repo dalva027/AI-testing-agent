@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Testing Agent - Multitenant QA Platform",
+    title="Qira - Testing Agent - Multitenant QA Platform",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",

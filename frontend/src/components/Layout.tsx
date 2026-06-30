@@ -31,7 +31,7 @@ export default function Layout() {
               <div className="w-8 h-8 bg-gradient-to-br from-primary-600 to-purple-600 rounded-lg flex items-center justify-center">
                 <Bug className="w-5 h-5 text-white" />
               </div>
-              <span className="text-lg font-bold text-gray-900">Testing<span className="text-primary-600">Agent</span></span>
+              <span className="text-lg font-bold text-gray-900"><span className="text-primary-600">Qira</span> – Testing Agent</span>
             </Link>
 
             <div className="hidden md:flex items-center gap-1">

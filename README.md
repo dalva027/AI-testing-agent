@@ -1,4 +1,4 @@
-﻿# Testing Agent - Multitenant QA Platform
+﻿# Qira - Testing Agent - Multitenant QA Platform
 
 A multitenant SaaS application for automated software QA testing using AI, Python, FastAPI, PostgreSQL, and Playwright.
 
