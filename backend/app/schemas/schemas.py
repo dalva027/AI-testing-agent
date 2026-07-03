@@ -111,6 +111,9 @@ class TestRunRequest(BaseModel):
     base_url: str
     mode: str = "generate"
     custom_prompt: Optional[str] = None
+    # When a run fails, regenerate the script from the failure output and re-run
+    # (up to the server-side attempt cap; each attempt is charged like a run).
+    heal: bool = True
 
 
 class TestRunResult(BaseModel):
@@ -122,6 +125,8 @@ class TestRunResult(BaseModel):
     session_url: Optional[str] = None
     playwright_script: Optional[str] = None
     duration_ms: Optional[float] = None
+    heal_attempts: int = 0
+    healed: bool = False
 
 
 class TestRunOut(BaseModel):

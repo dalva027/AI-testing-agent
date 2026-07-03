@@ -20,6 +20,8 @@ import toast from 'react-hot-toast'
 const DEFAULT_BASE_URL = 'http://localhost:5173'
 // Credits charged per test run (mirrors backend RUN_COST).
 const RUN_COST = 3
+// Extra charged repair attempts a failed run may spend (mirrors backend MAX_HEAL_ATTEMPTS).
+const MAX_HEAL_ATTEMPTS = 2
 
 // True only for a syntactically valid http(s) URL (after trimming whitespace).
 function isValidHttpUrl(value: string): boolean {
@@ -76,6 +78,8 @@ type RunResult = {
   sessionUrl?: string
   playwrightScript?: string
   duration_ms?: number
+  healAttempts?: number
+  healed?: boolean
 }
 
 export default function TestCaseExecutionModal({ isOpen, onClose, testCases, repository, autoStart = false, onComplete, onCreditsChange }: Props) {
@@ -85,6 +89,7 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
   const [results, setResults] = useState<Record<number, RunResult>>({})
   const [selectedDetail, setSelectedDetail] = useState<number | null>(null)
   const [executionMode, setExecutionMode] = useState<'cache' | 'generate'>('generate')
+  const [selfHeal, setSelfHeal] = useState(true)
   const [customPrompt, setCustomPrompt] = useState('')
   const [showOptions, setShowOptions] = useState(false)
   const [elapsed, setElapsed] = useState(0)
@@ -161,6 +166,7 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
           base_url: baseUrl.trim(),
           mode: executionMode,
           custom_prompt: customPrompt || undefined,
+          heal: selfHeal,
         })
 
         if (typeof res.data.credits === 'number') onCreditsChange?.(res.data.credits)
@@ -175,6 +181,8 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
               error: result.error,
               playwrightScript: result.playwright_script,
               duration_ms: result.duration_ms,
+              healAttempts: result.heal_attempts,
+              healed: result.healed,
             },
           }))
         }
@@ -195,7 +203,7 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
     }
 
     runTest()
-  }, [isExecuting, currentIdx, testCases, baseUrl, executionMode, customPrompt])
+  }, [isExecuting, currentIdx, testCases, baseUrl, executionMode, customPrompt, selfHeal])
 
   // Elapsed-time counter for the currently running test (resets per test).
   useEffect(() => {
@@ -355,7 +363,10 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
               {!baseUrlValid && (
                 <p className="text-xs text-rose-600">Enter a valid URL starting with http:// or https://</p>
               )}
-              <p className="text-xs text-gray-500">Each test run costs {RUN_COST} credits.</p>
+              <p className="text-xs text-gray-500">
+                Each test run costs {RUN_COST} credits.
+                {selfHeal && ` Failed runs self-heal (up to ${MAX_HEAL_ATTEMPTS} retries, ${RUN_COST} credits each).`}
+              </p>
               {showOptions && (
                 <div className="space-y-3">
                   <div>
@@ -376,6 +387,15 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
                       ))}
                     </div>
                   </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selfHeal}
+                      onChange={e => setSelfHeal(e.target.checked)}
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Self-heal failed runs</span>
+                  </label>
                   <div>
                     <span className="text-sm font-medium text-gray-700">Custom Prompt (optional)</span>
                     <textarea
@@ -424,6 +444,11 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
                         <p className="text-sm font-medium text-gray-900 truncate">{tc.title}</p>
                         <p className="text-xs text-gray-500 truncate">{tc.description}</p>
                       </div>
+                      {r?.healed && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-teal-100 text-teal-700">
+                          healed
+                        </span>
+                      )}
                       {r && (
                         <span className={`text-[10px] px-1.5 py-0.5 rounded ${
                           r.status === 'passed' ? 'bg-emerald-100 text-emerald-700' :
@@ -489,6 +514,11 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
                     }`}>
                       {currentResult.status}
                     </span>
+                    {currentResult.healed && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-teal-100 text-teal-700">
+                        self-healed ×{currentResult.healAttempts}
+                      </span>
+                    )}
                   </div>
                   {currentResult.playwrightScript && (
                     <span className="text-xs text-gray-400 flex items-center gap-1">

@@ -23,13 +23,28 @@ RUNNER_DIR = Path(__file__).resolve().parents[2] / "playwright_runner"
 TESTS_DIR = RUNNER_DIR / "tests"
 
 
+def _trim_failure_logs(logs: list[str], max_chars: int = 3500) -> str:
+    """Join runner log lines, keeping the tail where Playwright prints the error."""
+    text = "\n".join(logs)
+    if len(text) <= max_chars:
+        return text
+    return "...(earlier output trimmed)...\n" + text[-max_chars:]
+
+
 async def generate_playwright_script(
     test_case: dict,
     target_files: list[dict],
     global_instruction: str | None,
     base_url: str,
+    failure_context: dict | None = None,
 ) -> str:
-    """Generate a Playwright (@playwright/test) script for a test case using the LLM."""
+    """Generate a Playwright (@playwright/test) script for a test case using the LLM.
+
+    `failure_context` ({"script": str, "logs": list[str]}) carries the most recent
+    failing script for this test case and its runner output. When present, the model
+    is asked to diagnose that failure and repair it rather than regenerate blind —
+    without it, regeneration at temperature 0 tends to repeat the same mistake.
+    """
     prompt = f"""You are a Playwright automation expert. Write a complete Playwright script to test the following scenario.
 
 Test Case:
@@ -49,6 +64,25 @@ Target Application URL: {base_url}
 
     if global_instruction:
         prompt += f"\nGlobal Instructions: {global_instruction}\n"
+
+    if failure_context and failure_context.get("script"):
+        prompt += f"""
+A PREVIOUS SCRIPT FOR THIS EXACT TEST CASE FAILED against the live app. Diagnose the
+failure from the runner output below and write a script that avoids it. Typical root
+causes: a locator that matched nothing or several elements (strict mode), a route or
+label that does not exist, a page guarded by state (auth/cart), or an assertion on
+unstable copy.
+
+--- Previous failing script ---
+{failure_context["script"][:6000]}
+
+--- Runner output from the failed run ---
+{_trim_failure_logs(failure_context.get("logs") or [])}
+
+Do NOT repeat the failing selectors, routes or assertions unless the output proves they
+were not the problem. If the output shows an element or text does not exist, target
+something the source above confirms instead.
+"""
 
     prompt += """
 Write a complete Playwright script using the @playwright/test runner. Structure:
