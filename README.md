@@ -1,4 +1,4 @@
-﻿# Qira - Testing Agent - Multitenant QA Platform
+﻿# Qira - Testing Agent - QA Platform
 
 A multitenant SaaS application for automated software QA testing using AI, Python, FastAPI, PostgreSQL, and Playwright.
 
@@ -90,8 +90,6 @@ npm install
 # Run dev server (API proxied to backend)
 npm run dev
 ```
-
-Visit `http://localhost:5173` to use the app.
 
 ## API Documentation
 
