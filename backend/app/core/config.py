@@ -46,6 +46,16 @@ class Settings(BaseSettings):
             self.DATABASE_URL = self.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
         if self.DATABASE_URL.startswith("postgresql+psycopg2://"):
             self.DATABASE_URL = self.DATABASE_URL.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
+        # Managed-Postgres URLs (e.g. Neon) carry libpq query params that asyncpg's
+        # connect() rejects as kwargs: translate sslmode -> ssl, drop channel_binding.
+        if "+asyncpg" in self.DATABASE_URL and "?" in self.DATABASE_URL:
+            base, _, query = self.DATABASE_URL.partition("?")
+            params = [
+                "ssl=" + p.removeprefix("sslmode=") if p.startswith("sslmode=") else p
+                for p in query.split("&")
+                if p and not p.startswith("channel_binding=")
+            ]
+            self.DATABASE_URL = base + ("?" + "&".join(params) if params else "")
 
     @property
     def cors_origins(self) -> list[str]:

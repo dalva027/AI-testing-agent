@@ -1,0 +1,10 @@
+.env
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+playwright_runner/node_modules/
+playwright_runner/test-results/
+playwright_runner/tests/generated_*.spec.js
+Dockerfile
+.dockerignore

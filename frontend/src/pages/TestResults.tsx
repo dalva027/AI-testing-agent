@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
+import { githubLoginUrl } from '../lib/api'
 import {
   BarChart3,
   CheckCircle2,
@@ -233,7 +234,7 @@ export default function TestResults() {
         <p className="text-gray-500 mb-6">
           Test results are tracked per account. Connect a GitHub account to view your test executions.
         </p>
-        <a href="/api/auth/github/login" className="btn-primary inline-flex items-center gap-2">
+        <a href={githubLoginUrl} className="btn-primary inline-flex items-center gap-2">
           <Github className="w-4 h-4" />
           Connect GitHub
         </a>

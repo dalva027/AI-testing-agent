@@ -1,6 +1,7 @@
 ﻿import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import axios from 'axios'
+import { githubLoginUrl } from '../lib/api'
 import {
   Github,
   FolderGit2,
@@ -179,7 +180,7 @@ export default function Workspace() {
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Connect GitHub to Get Started</h3>
           <p className="text-gray-500 mb-4">Link your GitHub account to import repositories and start generating test cases.</p>
           <a
-            href="/api/auth/github/login"
+            href={githubLoginUrl}
             className="btn-primary inline-flex items-center gap-2"
           >
             <Github className="w-4 h-4" />

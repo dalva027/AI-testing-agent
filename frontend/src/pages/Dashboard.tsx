@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
+import { githubLoginUrl } from '../lib/api'
 import {
   FolderGit2,
   ListChecks,
@@ -113,7 +114,7 @@ export default function Dashboard() {
         <p className="text-gray-500 mb-6">
           Your projects track tests across your repositories. Connect a GitHub account to begin.
         </p>
-        <a href="/api/auth/github/login" className="btn-primary inline-flex items-center gap-2">
+        <a href={githubLoginUrl} className="btn-primary inline-flex items-center gap-2">
           <Github className="w-4 h-4" />
           Connect GitHub
         </a>

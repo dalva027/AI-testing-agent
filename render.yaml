@@ -1,0 +1,39 @@
+# Render Blueprint — deploys the Qira backend (FastAPI + Playwright runner).
+# Apply via Render Dashboard → Blueprints → New.
+services:
+  - type: web
+    name: qira-backend
+    runtime: docker
+    # Chromium needs real RAM headroom — the 512 MB free instance OOMs on
+    # browser runs. Starter (or above) is the practical minimum.
+    plan: starter
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Neon connection string (postgresql://... — the backend rewrites it to
+      # the asyncpg driver automatically).
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "false"
+      - key: HEADLESS
+        value: "true"
+      # Set the values below in the Render dashboard (sync: false = never in git).
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      # https://<this-service>.onrender.com/api/auth/github/callback
+      - key: GITHUB_REDIRECT_URI
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      # Comma-separated. The FIRST origin is also where the OAuth callback
+      # redirects after login, so put the Vercel domain first, e.g.
+      # https://qira.vercel.app
+      - key: ALLOWED_ORIGINS
+        sync: false
