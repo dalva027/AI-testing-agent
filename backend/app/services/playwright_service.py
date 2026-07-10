@@ -154,7 +154,17 @@ async def run_playwright_test(
 
     Returns a dict with logs, duration_ms, screenshot path (if any) and a success flag
     derived from the runner's exit code.
+
+    With TEST_RUNNER=github-actions the execution is delegated to a CI runner
+    (same result contract) so this process never launches Chromium.
     """
+    from app.core.config import get_settings
+
+    if get_settings().TEST_RUNNER == "github-actions":
+        from app.services.actions_runner import run_playwright_test_on_actions
+
+        return await run_playwright_test_on_actions(playwright_script, base_url, timeout)
+
     logs: list[str] = []
     start_time = time.time()
 

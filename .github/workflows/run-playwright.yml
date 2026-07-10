@@ -1,0 +1,97 @@
+# Executes ONE AI-generated Playwright spec on a disposable CI runner.
+#
+# Dispatched by the backend (app/services/actions_runner.py) when the
+# TEST_RUNNER=github-actions env var is set. The backend correlates the run it
+# started via the dispatch_id echoed into run-name, then collects the outcome
+# from the `result-<dispatch_id>` artifact. The job's red/green status mirrors
+# the test result, but the backend reads the artifact, not the conclusion.
+#
+# The spec is untrusted LLM output, which is exactly why it runs here: a
+# throwaway VM with read-only repo access and no secrets.
+name: qira-test-run
+run-name: "qira-test-run ${{ inputs.dispatch_id }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      dispatch_id:
+        description: Unique id the backend uses to find this run
+        required: true
+        type: string
+      script_b64:
+        description: Base64-encoded @playwright/test spec to execute
+        required: true
+        type: string
+      base_url:
+        description: Public URL of the app under test
+        required: true
+        type: string
+      timeout_ms:
+        description: Hard kill timeout for the test process
+        required: false
+        type: string
+        default: "60000"
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend/playwright_runner
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/playwright_runner/package-lock.json
+
+      - name: Install runner deps
+        run: npm ci
+
+      # Keep the cache key's version in lockstep with @playwright/test in
+      # backend/playwright_runner/package.json.
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-1.61.0
+
+      - name: Install Chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      # OS packages aren't cacheable; on a browser-cache hit we still need them.
+      - name: Install Chromium OS deps
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      # The spec goes through an env var + base64 so its content can't be
+      # interpreted by the shell.
+      - name: Write generated spec
+        env:
+          SCRIPT_B64: ${{ inputs.script_b64 }}
+        run: |
+          mkdir -p tests
+          printf '%s' "$SCRIPT_B64" | base64 -d > tests/generated.spec.js
+
+      - name: Run test
+        env:
+          PW_BASE_URL: ${{ inputs.base_url }}
+          QIRA_TIMEOUT_MS: ${{ inputs.timeout_ms }}
+        run: node ci_run.js
+
+      - name: Upload result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: result-${{ inputs.dispatch_id }}
+          path: backend/playwright_runner/result.json
+          retention-days: 3
+          if-no-files-found: ignore

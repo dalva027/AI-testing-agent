@@ -25,6 +25,20 @@ class Settings(BaseSettings):
     PLAYWRIGHT_BROWSERS_PATH: str = ""
     HEADLESS: bool = True
 
+    # Test execution backend. "local" runs specs in a subprocess on this machine
+    # (dev default); "github-actions" dispatches them to the CI workflow so the
+    # web service never launches Chromium (lets the backend fit a 512 MB free
+    # instance). See app/services/actions_runner.py.
+    TEST_RUNNER: str = "local"
+    # Fine-grained PAT with Actions read+write on GH_ACTIONS_REPO.
+    GH_ACTIONS_TOKEN: str = ""
+    # "owner/repo" hosting .github/workflows/run-playwright.yml (this repo).
+    GH_ACTIONS_REPO: str = ""
+    GH_ACTIONS_WORKFLOW: str = "run-playwright.yml"
+    GH_ACTIONS_REF: str = "main"
+    # Wall-clock budget per CI run in seconds (queueing + setup + the test).
+    GH_ACTIONS_RUN_TIMEOUT: int = 900
+
     # Auth
     SECRET_KEY: str = "change-me-to-a-real-secret-key"
     ALGORITHM: str = "HS256"

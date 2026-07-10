@@ -4,9 +4,12 @@ services:
   - type: web
     name: qira-backend
     runtime: docker
-    # Chromium needs real RAM headroom — the 512 MB free instance OOMs on
-    # browser runs. Starter (or above) is the practical minimum.
-    plan: starter
+    # Free works because Chromium no longer runs in this container: test
+    # execution is dispatched to GitHub Actions (TEST_RUNNER=github-actions).
+    # If you switch TEST_RUNNER back to "local", move to starter or above —
+    # browser runs OOM the 512 MB free instance. Free instances also spin down
+    # on idle (first request after a pause takes ~a minute).
+    plan: free
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     healthCheckPath: /health
@@ -22,6 +25,16 @@ services:
         value: "false"
       - key: HEADLESS
         value: "true"
+      # Run tests on GitHub Actions instead of in this container (see
+      # .github/workflows/run-playwright.yml and DEPLOYMENT.md §3).
+      - key: TEST_RUNNER
+        value: "github-actions"
+      # "owner/repo" of this repo on GitHub (hosts the workflow).
+      - key: GH_ACTIONS_REPO
+        sync: false
+      # Fine-grained PAT with Actions read+write on GH_ACTIONS_REPO.
+      - key: GH_ACTIONS_TOKEN
+        sync: false
       # Set the values below in the Render dashboard (sync: false = never in git).
       - key: GITHUB_CLIENT_ID
         sync: false
