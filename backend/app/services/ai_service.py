@@ -108,6 +108,73 @@ async def call_ai(prompt: str, temperature: float = 0.3, max_tokens: int = 8192)
     raise RuntimeError(f"AI request failed: {detail}")
 
 
+async def call_ai_tools(
+    messages: list[dict],
+    tools: list[dict],
+    temperature: float = 0.2,
+    max_tokens: int = 8192,
+) -> dict:
+    """Tool-calling chat completion for the agent loop (Gemini preferred,
+    OpenAI fallback — same provider strategy as call_ai).
+
+    Takes a full OpenAI-format conversation (system/user/assistant/tool
+    messages) plus function-tool definitions, and returns
+    {"content": str, "tool_calls": [{"id", "name", "arguments": dict}]}.
+    Malformed argument JSON is salvaged with extract_json_object rather than
+    crashing the loop. Raises RuntimeError when every provider fails.
+    """
+
+    def _parse(response) -> dict:
+        msg = response.choices[0].message
+        calls = []
+        for tc in msg.tool_calls or []:
+            raw_args = tc.function.arguments or "{}"
+            try:
+                args = json.loads(raw_args)
+            except json.JSONDecodeError:
+                args = extract_json_object(raw_args)
+            calls.append({
+                "id": tc.id,
+                "name": tc.function.name,
+                "arguments": args if isinstance(args, dict) else {},
+            })
+        return {"content": msg.content or "", "tool_calls": calls}
+
+    settings = get_settings()
+    errors: list[str] = []
+
+    if settings.GEMINI_API_KEY:
+        try:
+            client = AsyncOpenAI(api_key=settings.GEMINI_API_KEY, base_url=settings.GEMINI_BASE_URL)
+            response = await client.chat.completions.create(
+                model="gemini-2.5-flash",
+                messages=messages,
+                tools=tools,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return _parse(response)
+        except Exception as e:  # noqa: BLE001 - fall back to OpenAI on any provider error
+            errors.append(f"gemini: {e}")
+
+    if settings.OPENAI_API_KEY:
+        try:
+            client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                tools=tools,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return _parse(response)
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"openai: {e}")
+
+    detail = "; ".join(errors) if errors else "no AI provider configured (set GEMINI_API_KEY or OPENAI_API_KEY)"
+    raise RuntimeError(f"AI request failed: {detail}")
+
+
 def extract_json_object(text: str) -> dict:
     """Best-effort extraction of a JSON object from an LLM response.
 

@@ -30,24 +30,24 @@ export default function Landing() {
 
   return (
     <div className="space-y-16">
-      {/* ===== Hero ===== */}
-      <section className="static-dark relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-[#1a1340] text-white">
+      {/* ===== Hero (ink band, lime accents — the brand's dark hero) ===== */}
+      <section className="static-dark relative overflow-hidden rounded-3xl bg-gray-950 border border-white/10 text-white">
         {/* layered background */}
         <div className="absolute inset-0 bg-grid-dark opacity-60" />
-        <div className="absolute -top-24 -left-16 w-96 h-96 bg-primary-600/30 rounded-full blur-3xl" />
-        <div className="absolute -bottom-32 -right-10 w-[28rem] h-[28rem] bg-purple-600/30 rounded-full blur-3xl" />
+        <div className="absolute -top-24 -left-16 w-96 h-96 bg-primary-500/20 rounded-full blur-3xl" />
+        <div className="absolute -bottom-32 -right-10 w-[28rem] h-[28rem] bg-blue-400/15 rounded-full blur-3xl" />
 
         <div className="relative z-10 grid lg:grid-cols-2 gap-10 items-center p-8 md:p-12 lg:p-16">
           {/* Left: copy */}
           <div className="animate-rise">
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 border border-white/15 rounded-full text-sm font-medium mb-5">
-              <Zap className="w-4 h-4 text-amber-300" />
+              <Zap className="w-4 h-4 text-primary-500" />
               AI-Powered QA Automation
             </div>
-            <h1 className="text-4xl md:text-5xl xl:text-6xl font-extrabold leading-[1.05] tracking-tight">
+            <h1 className="text-4xl md:text-5xl xl:text-6xl font-black leading-[1.02] tracking-tight">
               Find the bugs
               <br />
-              <span className="bg-gradient-to-r from-primary-400 via-fuchsia-400 to-purple-400 bg-clip-text text-transparent animate-gradient-pan">
+              <span className="bg-gradient-to-r from-primary-500 via-primary-200 to-primary-500 bg-clip-text text-transparent animate-gradient-pan">
                 before your users do.
               </span>
             </h1>
@@ -60,7 +60,7 @@ export default function Landing() {
               {token ? (
                 <Link
                   to="/dashboard"
-                  className="inline-flex items-center gap-2 bg-white text-slate-900 font-semibold px-6 py-3 rounded-xl hover:bg-slate-100 transition-colors"
+                  className="inline-flex items-center gap-2 bg-primary-500 text-gray-900 font-semibold px-6 py-3 rounded-full hover:bg-primary-200 transition-colors"
                 >
                   <Terminal className="w-5 h-5" />
                   Open Dashboard
@@ -69,7 +69,7 @@ export default function Landing() {
               ) : (
                 <a
                   href={githubLoginUrl}
-                  className="inline-flex items-center gap-2 bg-white text-slate-900 font-semibold px-6 py-3 rounded-xl hover:bg-slate-100 transition-colors"
+                  className="inline-flex items-center gap-2 bg-primary-500 text-gray-900 font-semibold px-6 py-3 rounded-full hover:bg-primary-200 transition-colors"
                 >
                   <Github className="w-5 h-5" />
                   Connect GitHub
@@ -78,7 +78,7 @@ export default function Landing() {
               )}
               <Link
                 to="/workspace"
-                className="inline-flex items-center gap-2 bg-white/10 text-white font-semibold px-6 py-3 rounded-xl hover:bg-white/20 transition-colors border border-white/15"
+                className="inline-flex items-center gap-2 bg-white/10 text-white font-semibold px-6 py-3 rounded-full hover:bg-white/20 transition-colors border border-white/15"
               >
                 <GitBranch className="w-5 h-5" />
                 Explore Workspace
@@ -88,7 +88,7 @@ export default function Landing() {
             {/* trust chips */}
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-8 text-sm text-slate-400">
               <span className="inline-flex items-center gap-1.5"><Globe className="w-4 h-4 text-primary-400" /> Real Chromium</span>
-              <span className="inline-flex items-center gap-1.5"><Sparkles className="w-4 h-4 text-fuchsia-400" /> AI-generated</span>
+              <span className="inline-flex items-center gap-1.5"><Sparkles className="w-4 h-4 text-primary-300" /> AI-generated</span>
               <span className="inline-flex items-center gap-1.5"><ShieldCheck className="w-4 h-4 text-emerald-400" /> Sandboxed runs</span>
               <span className="inline-flex items-center gap-1.5"><Github className="w-4 h-4 text-slate-300" /> GitHub native</span>
             </div>
@@ -144,7 +144,7 @@ export default function Landing() {
                 </div>
                 <div className="mt-2 flex items-center text-slate-500">
                   <span className="text-primary-400">$</span>
-                  <span className="ml-2 inline-block w-2 h-4 bg-slate-300 animate-blink" />
+                  <span className="ml-2 inline-block w-2 h-4 bg-primary-500 animate-blink" />
                 </div>
               </div>
             </div>
@@ -155,7 +155,7 @@ export default function Landing() {
       {/* ===== How it works ===== */}
       <section>
         <div className="text-center mb-10">
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900">From repo to results in three steps</h2>
+          <h2 className="text-2xl md:text-3xl font-black tracking-tight text-gray-900">From repo to results in three steps</h2>
           <p className="text-gray-500 mt-2">No test-writing. No flaky setup. Just connect and run.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -164,27 +164,30 @@ export default function Landing() {
               icon: GitBranch,
               title: 'Connect your repo',
               desc: 'Link a public GitHub repository and we analyze its routes, components, and structure automatically.',
-              color: 'from-gray-700 to-gray-900',
+              tile: 'bg-gray-900',
+              glyph: 'text-primary-500',
             },
             {
               icon: Sparkles,
               title: 'AI generates tests',
               desc: 'The engine reads your source and writes Playwright test cases across UI, API, auth, and edge cases.',
-              color: 'from-primary-500 to-purple-600',
+              tile: 'bg-primary-500',
+              glyph: 'text-gray-900',
             },
             {
               icon: Play,
               title: 'Run in a real browser',
               desc: 'Each test executes in a sandboxed Chromium runner with detailed console output and pass/fail status.',
-              color: 'from-emerald-500 to-teal-600',
+              tile: 'bg-primary-100',
+              glyph: 'text-primary-700',
             },
           ].map((step, i) => (
             <div key={i} className="card card-hover p-6 relative">
-              <div className="absolute -top-3 -left-3 w-8 h-8 bg-gradient-to-br from-primary-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-md">
+              <div className="absolute -top-3 -left-3 w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center text-gray-900 text-sm font-bold shadow-md">
                 {i + 1}
               </div>
-              <div className={`w-12 h-12 bg-gradient-to-br ${step.color} rounded-xl flex items-center justify-center mb-4`}>
-                <step.icon className="w-6 h-6 text-white" />
+              <div className={`w-12 h-12 ${step.tile} rounded-2xl flex items-center justify-center mb-4`}>
+                <step.icon className={`w-6 h-6 ${step.glyph}`} />
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">{step.title}</h3>
               <p className="text-gray-600 leading-relaxed">{step.desc}</p>
@@ -196,7 +199,7 @@ export default function Landing() {
       {/* ===== Features ===== */}
       <section>
         <div className="text-center mb-10">
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Built for debugging real software</h2>
+          <h2 className="text-2xl md:text-3xl font-black tracking-tight text-gray-900">Built for debugging real software</h2>
           <p className="text-gray-500 mt-2">Everything you need to catch regressions early.</p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -219,15 +222,15 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ===== CTA band ===== */}
-      <section className="static-dark relative overflow-hidden rounded-3xl bg-gradient-to-r from-primary-600 to-purple-600 text-white p-8 md:p-12">
+      {/* ===== CTA band (polarity-flipped: ink surface, lime voice) ===== */}
+      <section className="static-dark relative overflow-hidden rounded-3xl bg-gray-950 border border-white/10 text-white p-8 md:p-12">
         <div className="absolute inset-0 bg-grid-dark opacity-40" />
-        <div className="absolute -right-8 -bottom-8 opacity-20">
+        <div className="absolute -right-8 -bottom-8 text-primary-500 opacity-20">
           <Bug className="w-48 h-48" />
         </div>
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div>
-            <h2 className="text-2xl md:text-3xl font-bold">Ship with confidence.</h2>
+            <h2 className="text-2xl md:text-3xl font-black tracking-tight text-primary-500">Ship with confidence.</h2>
             <p className="text-white/80 mt-2 max-w-xl">
               Connect a repository and watch AI turn your code into a passing (or failing) test suite.
             </p>
@@ -235,7 +238,7 @@ export default function Landing() {
           {token ? (
             <Link
               to="/dashboard"
-              className="inline-flex items-center gap-2 bg-white text-primary-700 font-semibold px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors shrink-0"
+              className="inline-flex items-center gap-2 bg-primary-500 text-gray-900 font-semibold px-6 py-3 rounded-full hover:bg-primary-200 transition-colors shrink-0"
             >
               <CheckCircle2 className="w-5 h-5" />
               Go to Dashboard
@@ -243,7 +246,7 @@ export default function Landing() {
           ) : (
             <a
               href={githubLoginUrl}
-              className="inline-flex items-center gap-2 bg-white text-primary-700 font-semibold px-6 py-3 rounded-xl hover:bg-gray-100 transition-colors shrink-0"
+              className="inline-flex items-center gap-2 bg-primary-500 text-gray-900 font-semibold px-6 py-3 rounded-full hover:bg-primary-200 transition-colors shrink-0"
             >
               <Github className="w-5 h-5" />
               Connect GitHub

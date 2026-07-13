@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Activity,
   BarChart3,
+  Bot,
   Globe,
   Settings2,
   FolderGit2,
@@ -153,7 +154,7 @@ export default function ProjectDashboard() {
             <FolderGit2 className="w-6 h-6 text-gray-600" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold text-gray-900 truncate">{repo.name}</h1>
+            <h1 className="text-2xl font-black tracking-tight text-gray-900 truncate">{repo.name}</h1>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-500 mt-1">
               <span className="truncate">{repo.full_name}</span>
               <span>·</span>
@@ -172,6 +173,13 @@ export default function ProjectDashboard() {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
+          <Link
+            to={`/dashboard/${repo.id}/agent`}
+            className="btn-secondary inline-flex items-center gap-2"
+          >
+            <Bot className="w-4 h-4" />
+            AI Agent
+          </Link>
           <Link
             to={`/workspace?repo=${repo.id}`}
             className="btn-primary inline-flex items-center gap-2"
@@ -308,7 +316,7 @@ export default function ProjectDashboard() {
                         </div>
                         <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-gradient-to-r from-primary-500 to-purple-500 rounded-full transition-all"
+                            className="h-full bg-primary-500 rounded-full transition-all"
                             style={{ width: `${maxType > 0 ? (count / maxType) * 100 : 0}%` }}
                           />
                         </div>

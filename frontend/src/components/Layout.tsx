@@ -22,16 +22,17 @@ export default function Layout() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Top Nav */}
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link to="/" className="flex items-center gap-2.5">
-              <div className="w-8 h-8 bg-gradient-to-br from-primary-600 to-purple-600 rounded-lg flex items-center justify-center">
-                <Bug className="w-5 h-5 text-white" />
+              {/* Ink tile + lime glyph: the brand's polarity-flip moment. */}
+              <div className="w-8 h-8 bg-gray-900 rounded-xl flex items-center justify-center">
+                <Bug className="w-5 h-5 text-primary-500" />
               </div>
-              <span className="text-lg font-bold text-gray-900"><span className="text-primary-600">Qira</span> – Testing Agent</span>
+              <span className="text-lg font-extrabold tracking-tight text-gray-900"><span className="text-primary-600">Qira</span> – Testing Agent</span>
             </Link>
 
             <div className="hidden md:flex items-center gap-1">
@@ -39,9 +40,9 @@ export default function Layout() {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-full text-sm font-semibold transition-colors ${
                     isActive(item.path)
-                      ? 'bg-primary-50 text-primary-700'
+                      ? 'bg-primary-100 text-primary-700'
                       : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                   }`}
                 >
@@ -56,7 +57,7 @@ export default function Layout() {
                 onClick={toggleTheme}
                 title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
                 aria-label="Toggle theme"
-                className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                className="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
               >
                 {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
@@ -65,7 +66,7 @@ export default function Layout() {
                 // low-balance cue; otherwise it stays amber.
                 <div
                   title={user.credits < 200 ? 'Low balance — generating test cases costs 200 credits' : undefined}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${
                     user.credits < 200 ? 'bg-rose-50 border-rose-200' : 'bg-amber-50 border-amber-200'
                   }`}
                 >

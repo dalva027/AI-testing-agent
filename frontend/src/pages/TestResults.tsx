@@ -23,13 +23,15 @@ import { useUser } from '../App'
 // Each AI test-case generation costs this many credits (mirrors the backend).
 const GENERATION_COST = 200
 
+// Brand palette: lime family for core types, tertiary illustration accents
+// (cyan/orange) and semantic hues for the rest — see DESIGN.md.
 const TYPE_HEX: Record<string, string> = {
-  ui: '#3b82f6',
-  auth: '#a855f7',
-  api: '#22c55e',
-  form: '#f59e0b',
-  integration: '#6366f1',
-  'edge-case': '#f43f5e',
+  ui: '#38c8ff',
+  auth: '#ffc091',
+  api: '#2ead4b',
+  form: '#ffd11a',
+  integration: '#6d7263',
+  'edge-case': '#d03238',
 }
 
 function dayKey(iso: string): string {
@@ -187,7 +189,7 @@ export default function TestResults() {
     }
     const coverage = [...typeCount.entries()]
       .sort((a, b) => b[1] - a[1])
-      .map(([type, value]) => ({ label: type, value, color: TYPE_HEX[type] || '#94a3b8' }))
+      .map(([type, value]) => ({ label: type, value, color: TYPE_HEX[type] || '#868685' }))
 
     return { passRate, passedVsFailed, credits, coverage }
   }, [scoped])
@@ -230,7 +232,7 @@ export default function TestResults() {
         <div className="w-14 h-14 bg-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-5">
           <Github className="w-7 h-7 text-white" />
         </div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Connect GitHub to get started</h2>
+        <h2 className="text-2xl font-black tracking-tight text-gray-900 mb-2">Connect GitHub to get started</h2>
         <p className="text-gray-500 mb-6">
           Test results are tracked per account. Connect a GitHub account to view your test executions.
         </p>
@@ -247,7 +249,7 @@ export default function TestResults() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Test Results</h1>
+          <h1 className="text-3xl font-black tracking-tight text-gray-900">Test Results</h1>
           <p className="text-gray-500 mt-1">
             {selectedProjectName
               ? `Test executions for ${selectedProjectName}`
@@ -336,7 +338,7 @@ export default function TestResults() {
             <h3 className="font-semibold text-gray-900 mb-4">Pass rate over time</h3>
             <TrendChart
               data={charts.passRate}
-              color="#7c3aed"
+              color="#163300"
               fmt={v => `${Math.round(v)}%`}
               valueLabel="Pass rate"
               clampMin={0}
@@ -353,7 +355,7 @@ export default function TestResults() {
             <h3 className="font-semibold text-gray-900 mb-4">AI spend over time (credits)</h3>
             <TrendChart
               data={charts.credits}
-              color="#f59e0b"
+              color="#b86700"
               area
               fmt={v => `${Math.round(v)}`}
               valueLabel="Credits"

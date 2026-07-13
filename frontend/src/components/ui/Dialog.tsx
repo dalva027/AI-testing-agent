@@ -56,7 +56,7 @@ export function DialogContent({ children, className = '', ...props }: React.HTML
       />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
-          className={`bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col ${className}`}
+          className={`bg-white rounded-3xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col ${className}`}
           {...props}
         >
           {children}

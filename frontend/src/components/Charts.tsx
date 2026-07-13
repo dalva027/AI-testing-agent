@@ -15,11 +15,11 @@ function useChartColors() {
   const { theme } = useTheme()
   const dark = theme === 'dark'
   return {
-    axis: dark ? '#94a3b8' : '#9ca3af',
-    grid: dark ? '#334155' : '#e5e7eb',
-    surface: dark ? '#1e293b' : '#ffffff',
-    text: dark ? '#f1f5f9' : '#111827',
-    subtext: dark ? '#cbd5e1' : '#4b5563',
+    axis: dark ? '#8d918a' : '#868685',
+    grid: dark ? '#2b2e27' : '#d9ddd3',
+    surface: dark ? '#1a1c17' : '#ffffff',
+    text: dark ? '#f0f2ec' : '#0e0f0c',
+    subtext: dark ? '#b9beb0' : '#575955',
   }
 }
 
@@ -106,7 +106,7 @@ interface TrendChartProps {
 
 export function TrendChart({
   data,
-  color = '#7c3aed',
+  color = '#163300',
   area = false,
   fmt = v => String(Math.round(v)),
   valueLabel = 'Value',
@@ -267,11 +267,11 @@ export function StackedBarChart({ data }: { data: BarDatum[] }) {
           <g key={i} opacity={dim ? 0.45 : 1}>
             {/* passed (bottom) */}
             {d.passed > 0 && (
-              <rect x={x} y={m.top + ih - passedH} width={barW} height={passedH} rx="2" fill="#22c55e" />
+              <rect x={x} y={m.top + ih - passedH} width={barW} height={passedH} rx="2" fill="#2ead4b" />
             )}
             {/* failed (top) */}
             {d.failed > 0 && (
-              <rect x={x} y={m.top + ih - passedH - failedH} width={barW} height={failedH} rx="2" fill="#ef4444" />
+              <rect x={x} y={m.top + ih - passedH - failedH} width={barW} height={failedH} rx="2" fill="#d03238" />
             )}
             {showLabel.has(i) && (
               <text x={xCenter(i)} y={H - 8} textAnchor="middle" fontSize="11" fill={C.axis}>
@@ -286,7 +286,7 @@ export function StackedBarChart({ data }: { data: BarDatum[] }) {
         <Tooltip
           x={xCenter(hover)}
           y={yAt(data[hover].passed + data[hover].failed)}
-          color="#22c55e"
+          color="#2ead4b"
           chartLeft={m.left}
           chartRight={W - m.right}
           lines={[

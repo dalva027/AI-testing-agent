@@ -231,7 +231,7 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
   return (
     <div className="space-y-4">
       {/* Generate Section */}
-      <div className="bg-gradient-to-r from-primary-50 to-purple-50 dark:from-primary-500/10 dark:to-purple-500/10 border border-primary-200 dark:border-primary-500/30 rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="bg-primary-100 border border-primary-300 dark:border-primary-500/30 rounded-3xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h3 className="font-semibold text-gray-900 flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-primary-600" />

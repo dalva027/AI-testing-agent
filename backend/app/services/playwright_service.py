@@ -37,6 +37,7 @@ async def generate_playwright_script(
     global_instruction: str | None,
     base_url: str,
     failure_context: dict | None = None,
+    custom_prompt: str | None = None,
 ) -> str:
     """Generate a Playwright (@playwright/test) script for a test case using the LLM.
 
@@ -44,6 +45,10 @@ async def generate_playwright_script(
     failing script for this test case and its runner output. When present, the model
     is asked to diagnose that failure and repair it rather than regenerate blind —
     without it, regeneration at temperature 0 tends to repeat the same mistake.
+
+    `custom_prompt` carries free-text instructions scoped to this run (from the
+    execution modal's "Custom Prompt" field or the agent's run_tests tool), as
+    opposed to `global_instruction` which applies to every run for the repo.
     """
     prompt = f"""You are a Playwright automation expert. Write a complete Playwright script to test the following scenario.
 
@@ -64,6 +69,12 @@ Target Application URL: {base_url}
 
     if global_instruction:
         prompt += f"\nGlobal Instructions: {global_instruction}\n"
+
+    if custom_prompt:
+        prompt += (
+            "\nRun-specific instructions from the user (apply to THIS test run, "
+            f"they take priority over the global instructions): {custom_prompt}\n"
+        )
 
     if failure_context and failure_context.get("script"):
         prompt += f"""

@@ -6,12 +6,13 @@ from app.schemas.schemas import TestCaseOut, TestCaseGenerate, TestCaseUpdate
 from app.models.models import TestCase, Repository, User
 from app.core.database import get_db
 from app.core.security import get_current_user, require_github_token
-from app.services.github_service import get_github_file, get_github_repo_tree
-from app.services.ai_service import generate_test_cases, select_source_files
+from app.services.testcase_service import (
+    GENERATION_COST,
+    InsufficientCreditsError,
+    generate_test_cases_for_repo,
+)
 
 router = APIRouter(prefix="/api/test-cases", tags=["test-cases"])
-
-GENERATION_COST = 200
 
 
 async def _get_owned_test_case(test_case_id: int, user: User, db: AsyncSession) -> TestCase:
@@ -56,80 +57,26 @@ async def generate_test_cases_endpoint(
     db: AsyncSession = Depends(get_db),
 ):
     """Analyze repo files and generate AI test cases."""
-    token = require_github_token(current_user)
+    require_github_token(current_user)
     repo = await _get_owned_repo(body.repo_id, current_user, db)
 
-    # Fast-fail before spending an expensive AI call.
-    if current_user.credits < GENERATION_COST:
-        raise HTTPException(status_code=402, detail=f"Insufficient credits. Required: {GENERATION_COST}")
-
-    # Gather source files from GitHub.
-    tree = await get_github_repo_tree(token, repo.owner, repo.name, body.branch)
-    useful_files = select_source_files(tree, limit=25)
-
-    file_contents = []
-    for f in useful_files:
-        content = await get_github_file(token, repo.owner, repo.name, f["path"], body.branch)
-        if content:
-            file_contents.append(content)
-
-    if not file_contents:
-        raise HTTPException(status_code=400, detail="No useful source files found in this repository")
-
-    # Generate test cases with AI.
+    # The generation flow itself lives in testcase_service (shared with the agent).
     try:
-        ai_test_cases = await generate_test_cases(
-            file_contents=file_contents,
-            global_instruction=repo.global_instruction,
-            repo_name=repo.name,
-            repo_owner=repo.owner,
-            target_domain=repo.target_domain or "http://localhost:5173",
+        outcome = await generate_test_cases_for_repo(
+            db, current_user, repo, branch=body.branch
         )
+    except InsufficientCreditsError as e:
+        raise HTTPException(status_code=402, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
 
-    if not ai_test_cases:
-        raise HTTPException(status_code=500, detail="AI failed to generate test cases")
-
-    # Atomically re-check + deduct credits and insert in a single transaction
-    # (row lock prevents concurrent generations from overspending).
-    locked = await db.execute(
-        select(User).where(User.id == current_user.id).with_for_update()
-    )
-    user = locked.scalar_one()
-    if user.credits < GENERATION_COST:
-        raise HTTPException(status_code=402, detail=f"Insufficient credits. Required: {GENERATION_COST}")
-    user.credits -= GENERATION_COST
-
-    inserted = []
-    for tc in ai_test_cases:
-        test_case = TestCase(
-            user_id=user.id,
-            repo_id=repo.id,
-            repo_name=repo.name,
-            repo_owner=repo.owner,
-            branch=body.branch,
-            title=tc.get("title", ""),
-            description=tc.get("description", ""),
-            test_type=tc.get("type", "ui"),
-            priority=tc.get("priority", "medium"),
-            target_route=tc.get("targetRoute"),
-            target_files=tc.get("targetFiles", []),
-            expected_result=tc.get("expectedResult"),
-            status="generated",
-        )
-        db.add(test_case)
-        inserted.append(test_case)
-
-    await db.commit()
-    for tc in inserted:
-        await db.refresh(tc)
-
     return {
         "success": True,
-        "count": len(inserted),
-        "test_cases": [TestCaseOut.model_validate(tc) for tc in inserted],
-        "credits": user.credits,
+        "count": outcome["count"],
+        "test_cases": [TestCaseOut.model_validate(tc) for tc in outcome["test_cases"]],
+        "credits": outcome["credits"],
     }
 
 

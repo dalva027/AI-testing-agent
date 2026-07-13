@@ -110,7 +110,7 @@ export default function Dashboard() {
         <div className="w-14 h-14 bg-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-5">
           <Github className="w-7 h-7 text-white" />
         </div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Connect GitHub to get started</h2>
+        <h2 className="text-2xl font-black tracking-tight text-gray-900 mb-2">Connect GitHub to get started</h2>
         <p className="text-gray-500 mb-6">
           Your projects track tests across your repositories. Connect a GitHub account to begin.
         </p>
@@ -172,7 +172,7 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-black tracking-tight text-gray-900">
             {user?.name ? `Welcome back, ${user.name}` : 'Projects'}
           </h1>
           <p className="text-gray-500 mt-1">Your repositories and their test coverage at a glance</p>

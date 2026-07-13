@@ -1,20 +1,174 @@
-﻿@import "tailwindcss";
+@import "tailwindcss";
 
 /* Class-based dark mode (toggled by adding `.dark` to <html>). */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ============================================================ *
+ * Design tokens — Wise-inspired system (see DESIGN.md).
+ * One brand accent: lime green #9fe870 with near-black ink text.
+ * Neutrals are warm/olive-tinted (sage canvas #e8ebe6, ink #0e0f0c).
+ * The standard Tailwind palettes the app already uses are remapped
+ * here to brand families so existing utility classes restyle
+ * centrally: gray/slate -> olive neutrals, emerald/green -> positive,
+ * rose/red -> negative, amber/yellow -> warning, blue -> accent-cyan,
+ * purple -> accent-orange, indigo -> muted olive, teal -> pale lime.
+ * ============================================================ */
 @theme {
-  --color-primary-50: #eff6ff;
-  --color-primary-100: #dbeafe;
-  --color-primary-200: #bfdbfe;
-  --color-primary-300: #93c5fd;
-  --color-primary-400: #60a5fa;
-  --color-primary-500: #3b82f6;
-  --color-primary-600: #2563eb;
-  --color-primary-700: #1d4ed8;
-  --color-primary-800: #1e40af;
-  --color-primary-900: #1e3a8a;
-  --border: #e5e7eb;
+  /* Brand green ladder. 500 is THE lime; 600+ are the deep forest
+   * greens (ink-deep) used for text links and dark-green fills. */
+  --color-primary-50: #f2fae9;
+  --color-primary-100: #e2f6d5;
+  --color-primary-200: #cdffad;
+  --color-primary-300: #c5edab;
+  --color-primary-400: #b1ee85;
+  --color-primary-500: #9fe870;
+  --color-primary-600: #1d4008;
+  --color-primary-700: #163300;
+  --color-primary-800: #0e2200;
+  --color-primary-900: #081400;
+
+  /* Warm olive neutrals (canvas-soft #e8ebe6, body #454745, ink #0e0f0c). */
+  --color-gray-50: #e8ebe6;
+  --color-gray-100: #dde1d8;
+  --color-gray-200: #d0d5ca;
+  --color-gray-300: #b4b9ae;
+  --color-gray-400: #868685;
+  --color-gray-500: #6b6d6a;
+  --color-gray-600: #575955;
+  --color-gray-700: #454745;
+  --color-gray-800: #2b2d2a;
+  --color-gray-900: #0e0f0c;
+  --color-gray-950: #0a0b08;
+
+  --color-slate-50: #eceee9;
+  --color-slate-100: #e4e7df;
+  --color-slate-200: #d0d5ca;
+  --color-slate-300: #b4b9ae;
+  --color-slate-400: #8d918a;
+  --color-slate-500: #767a70;
+  --color-slate-600: #5b5f55;
+  --color-slate-700: #3a3e35;
+  --color-slate-800: #24271f;
+  --color-slate-900: #191b16;
+  --color-slate-950: #0b0c09;
+
+  /* Positive family (#2ead4b, deep #054d28). */
+  --color-emerald-50: #ebf9ee;
+  --color-emerald-100: #d8f3de;
+  --color-emerald-200: #b3e7c0;
+  --color-emerald-300: #83d698;
+  --color-emerald-400: #4cc368;
+  --color-emerald-500: #2ead4b;
+  --color-emerald-600: #1f8f3c;
+  --color-emerald-700: #0f6f30;
+  --color-emerald-800: #054d28;
+  --color-emerald-900: #043a1f;
+  --color-green-50: #ebf9ee;
+  --color-green-100: #d8f3de;
+  --color-green-200: #b3e7c0;
+  --color-green-300: #83d698;
+  --color-green-400: #4cc368;
+  --color-green-500: #2ead4b;
+  --color-green-600: #1f8f3c;
+  --color-green-700: #0f6f30;
+  --color-green-800: #054d28;
+  --color-green-900: #043a1f;
+
+  /* Negative family (#d03238, deep #a72027). */
+  --color-rose-50: #fdf0f0;
+  --color-rose-100: #f9dcdd;
+  --color-rose-200: #f2b6b8;
+  --color-rose-300: #e88a8d;
+  --color-rose-400: #dc5a5f;
+  --color-rose-500: #d03238;
+  --color-rose-600: #c02a30;
+  --color-rose-700: #a72027;
+  --color-rose-800: #8f1a20;
+  --color-rose-900: #6e1218;
+  --color-red-50: #fdf0f0;
+  --color-red-100: #f9dcdd;
+  --color-red-200: #f2b6b8;
+  --color-red-300: #e88a8d;
+  --color-red-400: #dc5a5f;
+  --color-red-500: #d03238;
+  --color-red-600: #c02a30;
+  --color-red-700: #a72027;
+  --color-red-800: #8f1a20;
+  --color-red-900: #6e1218;
+
+  /* Warning family (#ffd11a, deep #b86700, content #4a3b1c). */
+  --color-amber-50: #fffae6;
+  --color-amber-100: #fff3bf;
+  --color-amber-200: #ffeb99;
+  --color-amber-300: #ffe066;
+  --color-amber-400: #ffd83d;
+  --color-amber-500: #ffd11a;
+  --color-amber-600: #d9a800;
+  --color-amber-700: #b86700;
+  --color-amber-800: #4a3b1c;
+  --color-amber-900: #3a2e14;
+  --color-yellow-50: #fffae6;
+  --color-yellow-100: #fff3bf;
+  --color-yellow-200: #ffeb99;
+  --color-yellow-300: #ffe066;
+  --color-yellow-400: #ffd83d;
+  --color-yellow-500: #ffd11a;
+  --color-yellow-600: #d9a800;
+  --color-yellow-700: #b86700;
+  --color-yellow-800: #4a3b1c;
+  --color-yellow-900: #3a2e14;
+
+  /* Tertiary illustration accent — cyan (#38c8ff). */
+  --color-blue-50: #ebf9ff;
+  --color-blue-100: #d7f3ff;
+  --color-blue-200: #ade6ff;
+  --color-blue-300: #7cd8ff;
+  --color-blue-400: #38c8ff;
+  --color-blue-500: #17aeea;
+  --color-blue-600: #0d8fc4;
+  --color-blue-700: #0a719b;
+  --color-blue-800: #075e85;
+  --color-blue-900: #06455f;
+
+  /* Tertiary illustration accent — warm orange (#ffc091). */
+  --color-purple-50: #fff4ea;
+  --color-purple-100: #ffe4cf;
+  --color-purple-200: #ffd4b3;
+  --color-purple-300: #ffc091;
+  --color-purple-400: #f3a468;
+  --color-purple-500: #e08a3c;
+  --color-purple-600: #c56f24;
+  --color-purple-700: #a05716;
+  --color-purple-800: #7c400d;
+  --color-purple-900: #5a2e08;
+
+  /* Muted olive (former indigo chips). */
+  --color-indigo-50: #eef0ea;
+  --color-indigo-100: #e2e6dc;
+  --color-indigo-200: #d3d8cb;
+  --color-indigo-300: #b7bdac;
+  --color-indigo-400: #969c8b;
+  --color-indigo-500: #6d7263;
+  --color-indigo-600: #5c6153;
+  --color-indigo-700: #4b5044;
+  --color-indigo-800: #3f4438;
+  --color-indigo-900: #30342b;
+
+  /* Pale-lime family (former teal chips, e.g. "healed"). */
+  --color-teal-50: #f2fae9;
+  --color-teal-100: #e2f6d5;
+  --color-teal-200: #cdffad;
+  --color-teal-300: #b1ee85;
+  --color-teal-400: #7fd254;
+  --color-teal-500: #4fa930;
+  --color-teal-600: #2e7f16;
+  --color-teal-700: #163300;
+  --color-teal-800: #0e2200;
+  --color-teal-900: #081400;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --border: #d9ddd3;
 }
 
 @layer base {
@@ -23,30 +177,38 @@
   }
   body {
     @apply bg-gray-50 text-gray-900 font-sans antialiased;
+    font-feature-settings: "calt";
   }
 }
 
 @layer components {
+  /* White card on the sage canvas — surface contrast IS the elevation
+   * (Level 0 flat, 24px signature radius, no border in light mode). */
   .card {
-    @apply bg-white rounded-xl border border-gray-200 shadow-sm;
+    @apply bg-white rounded-3xl border border-transparent shadow-none;
   }
   .card-hover {
-    @apply hover:shadow-md hover:border-gray-300 transition-all duration-200;
+    @apply hover:shadow-md hover:-translate-y-0.5 transition-all duration-200;
   }
+  /* Lime CTA pill: brand primary fill, ink text, hover flips to the
+   * lighter "active" green per the design's primary-active token. */
   .btn-primary {
-    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium px-4 py-2 rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2;
+    @apply bg-primary-500 hover:bg-primary-200 text-gray-900 font-semibold px-4 py-2 rounded-full transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2;
   }
+  /* Sage secondary pill. */
   .btn-secondary {
-    @apply bg-white hover:bg-gray-50 text-gray-700 font-medium px-4 py-2 rounded-lg border border-gray-300 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2;
+    @apply bg-gray-100 hover:bg-gray-200 text-gray-900 font-semibold px-4 py-2 rounded-full border border-transparent transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2;
   }
   .badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
   }
+  /* Status pills follow the design's badge tokens: positive = pale green
+   * + deep forest text, negative = dark maroon + white text. */
   .badge-passed {
-    @apply bg-emerald-100 text-emerald-800;
+    @apply bg-primary-100 text-emerald-800;
   }
   .badge-failed {
-    @apply bg-rose-100 text-rose-800;
+    @apply bg-[#320707] text-white;
   }
   .badge-pending {
     @apply bg-amber-100 text-amber-800;
@@ -57,17 +219,18 @@
   .badge-neutral {
     @apply bg-gray-100 text-gray-700;
   }
+  /* Ink-bordered input on white, 12px radius. */
   .input {
-    @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all;
+    @apply w-full px-3 py-2 bg-white border border-gray-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900/15 transition-all;
   }
   .stat-card {
-    @apply bg-white rounded-xl border border-gray-200 p-5;
+    @apply bg-white rounded-3xl border border-transparent p-5;
   }
 }
 
 @layer utilities {
   .text-gradient {
-    @apply bg-gradient-to-r from-primary-600 via-purple-600 to-primary-600 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-gray-900 via-primary-700 to-gray-900 bg-clip-text text-transparent;
   }
   .glass {
     @apply bg-white/80 backdrop-blur-lg border border-white/20;
@@ -104,8 +267,8 @@
 
 .bg-grid {
   background-image:
-    linear-gradient(to right, rgba(148, 163, 184, 0.14) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(148, 163, 184, 0.14) 1px, transparent 1px);
+    linear-gradient(to right, rgba(107, 109, 104, 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(107, 109, 104, 0.12) 1px, transparent 1px);
   background-size: 28px 28px;
 }
 .bg-grid-dark {
@@ -116,7 +279,7 @@
 }
 
 /* ============================================================ *
- * Dark mode — centralized overrides.
+ * Dark mode — centralized overrides (ink/olive polarity flip).
  * These rules are intentionally UNLAYERED so they take precedence
  * over Tailwind's layered utilities, letting the existing light
  * utility classes (bg-white, text-gray-900, ...) flip to dark with
@@ -124,91 +287,102 @@
  * (bg-gray-900/950 code & toolbars, text-white) are left untouched.
  * ============================================================ */
 .dark body {
-  background-color: #0f172a;
-  color: #f1f5f9;
+  background-color: #0e0f0c;
+  color: #f0f2ec;
 }
 
 /* Surfaces */
-.dark .bg-white { background-color: #1e293b; }
-.dark .bg-white\/80 { background-color: rgba(30, 41, 59, 0.8); }
-.dark .bg-white\/90 { background-color: rgba(30, 41, 59, 0.9); }
-.dark .bg-gray-50 { background-color: #0f172a; }
-.dark .bg-gray-50\/50 { background-color: rgba(15, 23, 42, 0.5); }
-.dark .bg-gray-100 { background-color: #334155; }
+.dark .bg-white { background-color: #1a1c17; }
+.dark .bg-white\/80 { background-color: rgba(26, 28, 23, 0.8); }
+.dark .bg-white\/90 { background-color: rgba(26, 28, 23, 0.9); }
+.dark .bg-gray-50 { background-color: #0e0f0c; }
+.dark .bg-gray-50\/50 { background-color: rgba(14, 15, 12, 0.5); }
+.dark .bg-gray-100 { background-color: #262a22; }
 
 /* Text */
-.dark .text-gray-900 { color: #f1f5f9; }
-.dark .text-gray-700 { color: #e2e8f0; }
-.dark .text-gray-600 { color: #cbd5e1; }
-.dark .text-gray-500 { color: #94a3b8; }
-.dark .text-gray-400 { color: #94a3b8; }
+.dark .text-gray-900 { color: #f0f2ec; }
+.dark .text-gray-700 { color: #d7dbd0; }
+.dark .text-gray-600 { color: #b9beb0; }
+.dark .text-gray-500 { color: #8d918a; }
+.dark .text-gray-400 { color: #8d918a; }
 
 /* Borders */
-.dark .border-gray-100 { border-color: #1f2937; }
-.dark .border-gray-200 { border-color: #334155; }
-.dark .border-gray-300 { border-color: #475569; }
+.dark .border-gray-100 { border-color: #20231c; }
+.dark .border-gray-200 { border-color: #2b2e27; }
+.dark .border-gray-300 { border-color: #3b3f36; }
 /* Apply to every child (not just `~` siblings) so the first row's divider flips too. */
-.dark .divide-gray-100 > * { border-color: #1f2937; }
-.dark .divide-gray-200 > * { border-color: #334155; }
+.dark .divide-gray-100 > * { border-color: #20231c; }
+.dark .divide-gray-200 > * { border-color: #2b2e27; }
 
 /* Hover backgrounds on rows/items */
-.dark .hover\:bg-gray-50:hover { background-color: #334155; }
-.dark .hover\:bg-gray-100:hover { background-color: #334155; }
+.dark .hover\:bg-gray-50:hover { background-color: #242720; }
+.dark .hover\:bg-gray-100:hover { background-color: #2e332a; }
 
 /* Shared component classes (use @apply, so override the class directly) */
-.dark .card { background-color: #1e293b; border-color: #334155; }
-.dark .stat-card { background-color: #1e293b; border-color: #334155; }
-.dark .input { background-color: #0f172a; border-color: #475569; color: #f1f5f9; }
-.dark .btn-secondary { background-color: #1e293b; border-color: #475569; color: #e2e8f0; }
-.dark .btn-secondary:hover { background-color: #334155; }
+.dark .card { background-color: #1a1c17; border-color: #24271f; }
+.dark .stat-card { background-color: #1a1c17; border-color: #24271f; }
+.dark .input { background-color: #12140f; border-color: #4a4e44; color: #f0f2ec; }
+.dark .btn-secondary { background-color: #262a22; color: #e5e8e0; }
+.dark .btn-secondary:hover { background-color: #31352c; }
 
-/* Accent icon chips (the soft -50 tints behind stat-card icons) */
-.dark .bg-primary-50 { background-color: rgba(37, 99, 235, 0.16); }
-.dark .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.14); }
-.dark .bg-rose-50 { background-color: rgba(244, 63, 94, 0.14); }
-.dark .bg-amber-50 { background-color: rgba(245, 158, 11, 0.14); }
-.dark .bg-blue-50 { background-color: rgba(59, 130, 246, 0.14); }
-.dark .bg-purple-50 { background-color: rgba(168, 85, 247, 0.14); }
+/* Accent icon chips (the soft tints behind stat-card icons) */
+.dark .bg-primary-50 { background-color: rgba(159, 232, 112, 0.12); }
+.dark .bg-emerald-50 { background-color: rgba(46, 173, 75, 0.14); }
+.dark .bg-rose-50 { background-color: rgba(208, 50, 56, 0.16); }
+.dark .bg-amber-50 { background-color: rgba(255, 209, 26, 0.12); }
+.dark .bg-blue-50 { background-color: rgba(56, 200, 255, 0.12); }
+.dark .bg-purple-50 { background-color: rgba(255, 192, 145, 0.12); }
 
-/* Brand accents — brighten for contrast on dark surfaces */
-.dark .text-primary-600 { color: #60a5fa; }
-.dark .text-primary-700 { color: #93c5fd; }
-.dark .bg-primary-100 { background-color: rgba(37, 99, 235, 0.25); }
+/* Brand accents — the lime reads as the accent on dark surfaces */
+.dark .text-primary-600 { color: #9fe870; }
+.dark .text-primary-700 { color: #cdffad; }
+.dark .bg-primary-100 { background-color: rgba(159, 232, 112, 0.18); }
 
 /* Credits pill */
-.dark .border-amber-200 { border-color: rgba(245, 158, 11, 0.35); }
-.dark .text-amber-700 { color: #fcd34d; }
-.dark .text-amber-800 { color: #fde68a; }
+.dark .border-amber-200 { border-color: rgba(255, 209, 26, 0.3); }
+.dark .text-amber-700 { color: #ffd11a; }
+.dark .text-amber-800 { color: #ffe28a; }
+
+/* Semantic text accents that would go muddy on ink */
+.dark .text-emerald-600 { color: #4cc368; }
+.dark .text-rose-600 { color: #e06a6e; }
+.dark .text-amber-600 { color: #ffd83d; }
 
 /* Type / status pill tints (used inline and via badge-* classes) */
-.dark .bg-blue-100 { background-color: rgba(59, 130, 246, 0.2); }
-.dark .text-blue-800 { color: #93c5fd; }
-.dark .bg-purple-100 { background-color: rgba(168, 85, 247, 0.2); }
-.dark .text-purple-800 { color: #d8b4fe; }
-.dark .bg-green-100 { background-color: rgba(34, 197, 94, 0.2); }
-.dark .text-green-800 { color: #86efac; }
-.dark .bg-amber-100 { background-color: rgba(245, 158, 11, 0.2); }
-.dark .bg-indigo-100 { background-color: rgba(99, 102, 241, 0.2); }
-.dark .text-indigo-800 { color: #c7d2fe; }
-.dark .bg-rose-100 { background-color: rgba(244, 63, 94, 0.2); }
-.dark .text-rose-800 { color: #fda4af; }
-.dark .bg-red-100 { background-color: rgba(239, 68, 68, 0.2); }
-.dark .text-red-700 { color: #fca5a5; }
-.dark .bg-yellow-100 { background-color: rgba(234, 179, 8, 0.2); }
-.dark .text-yellow-700 { color: #fde047; }
+.dark .bg-blue-100 { background-color: rgba(56, 200, 255, 0.16); }
+.dark .text-blue-800 { color: #7cd8ff; }
+.dark .bg-purple-100 { background-color: rgba(255, 192, 145, 0.16); }
+.dark .text-purple-800 { color: #ffce9e; }
+.dark .text-purple-600 { color: #ffc091; }
+.dark .border-purple-200 { border-color: rgba(255, 192, 145, 0.3); }
+.dark .bg-green-100 { background-color: rgba(46, 173, 75, 0.18); }
+.dark .text-green-800 { color: #8fe0a5; }
+.dark .bg-amber-100 { background-color: rgba(255, 209, 26, 0.14); }
+.dark .bg-indigo-100 { background-color: rgba(150, 156, 139, 0.2); }
+.dark .text-indigo-800 { color: #cfd4c8; }
+.dark .bg-rose-100 { background-color: rgba(208, 50, 56, 0.2); }
+.dark .text-rose-800 { color: #f3a1a4; }
+.dark .bg-red-100 { background-color: rgba(208, 50, 56, 0.2); }
+.dark .text-red-700 { color: #e57d81; }
+.dark .bg-yellow-100 { background-color: rgba(255, 209, 26, 0.14); }
+.dark .text-yellow-700 { color: #ffd11a; }
+.dark .bg-teal-100 { background-color: rgba(159, 232, 112, 0.14); }
+.dark .text-teal-700 { color: #b1ee85; }
 
-.dark .badge-passed { background-color: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
-.dark .badge-failed { background-color: rgba(244, 63, 94, 0.2); color: #fda4af; }
-.dark .badge-pending { background-color: rgba(245, 158, 11, 0.2); color: #fcd34d; }
-.dark .badge-info { background-color: rgba(59, 130, 246, 0.2); color: #93c5fd; }
-.dark .badge-neutral { background-color: #334155; color: #cbd5e1; }
+.dark .badge-passed { background-color: rgba(159, 232, 112, 0.16); color: #cdffad; }
+.dark .badge-failed { background-color: rgba(208, 50, 56, 0.22); color: #f3a1a4; }
+.dark .badge-pending { background-color: rgba(255, 209, 26, 0.14); color: #ffe28a; }
+.dark .badge-info { background-color: rgba(56, 200, 255, 0.16); color: #7cd8ff; }
+.dark .badge-neutral { background-color: #262a22; color: #b9beb0; }
 
 /* Sections that are dark in BOTH themes (landing hero / CTA band): the dark
- * overrides above would wrongly darken their inner white buttons, so restore
- * those here. These come AFTER the dark rules, so they win on equal specificity,
- * and are no-ops in light mode (the values already match). */
+ * overrides above would wrongly restyle their inner elements, so restore
+ * those here. These come AFTER the dark rules, so they win on equal
+ * specificity, and are no-ops in light mode (the values already match). */
 .static-dark .bg-white { background-color: #ffffff; }
-.static-dark .text-primary-700 { color: #1d4ed8; }
+.static-dark .text-gray-900 { color: #0e0f0c; }
+.static-dark .bg-primary-50 { background-color: rgba(159, 232, 112, 0.12); }
+.static-dark .text-primary-600 { color: #9fe870; }
 
 /* Smooth theme switch */
 body,

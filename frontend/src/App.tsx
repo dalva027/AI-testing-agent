@@ -6,6 +6,7 @@ import Layout from './components/Layout'
 import Landing from './pages/Landing'
 import Dashboard from './pages/Dashboard'
 import ProjectDashboard from './pages/ProjectDashboard'
+import AgentConsole from './pages/AgentConsole'
 import Workspace from './pages/Workspace'
 import TestResults from './pages/TestResults'
 
@@ -166,6 +167,7 @@ function App() {
           <Route index element={<Landing />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="dashboard/:repoId" element={<ProjectDashboard />} />
+          <Route path="dashboard/:repoId/agent" element={<AgentConsole />} />
           <Route path="workspace" element={<Workspace />} />
           <Route path="results" element={<TestResults />} />
         </Route>

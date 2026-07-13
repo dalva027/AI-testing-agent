@@ -8,8 +8,10 @@ from app.routes.repo_routes import router as repo_router
 from app.routes.testcase_routes import router as testcase_router
 from app.routes.testrun_routes import router as testrun_router
 from app.routes.test_results_routes import router as test_results_router
+from app.routes.agent_routes import router as agent_router
 from app.core.config import get_settings
 from app.core.database import init_db
+from app.services.agent_service import sweep_interrupted_tasks
 
 settings = get_settings()
 
@@ -18,6 +20,9 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     # Create tables on startup (dev convenience; use Alembic migrations in production).
     await init_db()
+    # Agent loops run in-process, so a restart orphans queued/running tasks;
+    # mark them stale (the user can resume by sending a message).
+    await sweep_interrupted_tasks()
     yield
 
 
@@ -42,6 +47,7 @@ app.include_router(repo_router)
 app.include_router(testcase_router)
 app.include_router(testrun_router)
 app.include_router(test_results_router)
+app.include_router(agent_router)
 
 
 @app.get("/")

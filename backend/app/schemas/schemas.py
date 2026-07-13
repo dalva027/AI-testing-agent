@@ -1,5 +1,5 @@
-from pydantic import BaseModel, EmailStr
-from typing import Optional, List
+from pydantic import BaseModel, EmailStr, Field
+from typing import Any, Optional, List
 from datetime import datetime
 
 
@@ -151,3 +151,51 @@ class TestStats(BaseModel):
     failed_tests: int
     pending_tests: int
     pass_rate: float
+
+
+class AgentTaskCreate(BaseModel):
+    repo_id: int
+    goal: str = Field(min_length=1, max_length=8000)
+    # Hard credit ceiling for this task (LLM steps + generations + runs).
+    credits_budget: int = Field(default=500, ge=10, le=2000)
+
+
+class AgentMessageIn(BaseModel):
+    content: str = Field(min_length=1, max_length=8000)
+
+
+class AgentTaskOut(BaseModel):
+    id: int
+    user_id: int
+    repo_id: int
+    goal: str
+    status: str
+    result: Optional[str]
+    verdict: Optional[str]
+    error: Optional[str]
+    credits_budget: int
+    credits_spent: int
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class AgentEventOut(BaseModel):
+    id: int
+    role: str
+    content: Optional[str]
+    tool_name: Optional[str]
+    tool_args: Optional[Any]
+    tool_result: Optional[Any]
+    created_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+
+class AgentTaskDetail(BaseModel):
+    task: AgentTaskOut
+    # Events with id > after_id (the polling cursor); ordered oldest first.
+    events: List[AgentEventOut]
