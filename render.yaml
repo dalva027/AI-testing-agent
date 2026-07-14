@@ -8,7 +8,9 @@ services:
     # execution is dispatched to GitHub Actions (TEST_RUNNER=github-actions).
     # If you switch TEST_RUNNER back to "local", move to starter or above —
     # browser runs OOM the 512 MB free instance. Free instances also spin down
-    # on idle (first request after a pause takes ~a minute).
+    # on idle (first request after a pause takes ~a minute) — the keep-alive
+    # workflow (.github/workflows/keep-alive.yml) pings /health every 10 min
+    # to prevent this.
     plan: free
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
