@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from 'react'
+﻿import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import { githubLoginUrl } from '../lib/api'
@@ -43,7 +43,7 @@ interface Stats {
 
 export default function Workspace() {
   const { token } = useUser()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [repos, setRepos] = useState<Repo[]>([])
   const [githubRepos, setGithubRepos] = useState<any[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
@@ -55,6 +55,9 @@ export default function Workspace() {
   const [statsLoading, setStatsLoading] = useState(false)
   // Repo awaiting remove confirmation (null = dialog closed).
   const [confirmRepo, setConfirmRepo] = useState<Repo | null>(null)
+  // Repo whose settings dialog is open (controlled so we can auto-open it
+  // right after connecting a repo that has no target URL yet).
+  const [settingsOpenRepoId, setSettingsOpenRepoId] = useState<number | null>(null)
 
   const fetchRepos = useCallback(async () => {
     if (!token) {
@@ -99,7 +102,7 @@ export default function Workspace() {
 
   const addRepo = async (ghRepo: any) => {
     try {
-      await axios.post('/api/repos', {
+      const res = await axios.post('/api/repos', {
         repo_id: ghRepo.id,
         name: ghRepo.name,
         full_name: ghRepo.full_name,
@@ -111,7 +114,19 @@ export default function Workspace() {
       })
       toast.success(`Added ${ghRepo.full_name}`)
       setShowRepoDialog(false)
-      fetchRepos()
+      await fetchRepos()
+      // New repos have no target URL: expand the repo and open its settings
+      // so the user configures one right away (runs are blocked until then).
+      // Re-adding an already-configured repo returns the existing row → no nag.
+      if (!res.data.target_domain) {
+        // A stale ?repo= deep-link would re-select that repo when `repos`
+        // refreshes and bury the auto-opened dialog — drop it first.
+        if (searchParams.get('repo')) setSearchParams({}, { replace: true })
+        setSelectedRepo(res.data)
+        loadStats(res.data.id)
+        setSettingsOpenRepoId(res.data.id)
+        toast('Test runs are disabled until you set a target URL for this repo.', { icon: '⚠️' })
+      }
     } catch (e: any) {
       toast.error(e.response?.data?.detail || 'Failed to add repo')
     }
@@ -141,11 +156,17 @@ export default function Workspace() {
   }
 
   // Deep link from a project page (/workspace?repo=:id): auto-open that repo.
+  // Each param value is consumed once — otherwise the effect re-fires on every
+  // `repos` refresh and steals the selection from later user actions (e.g. the
+  // auto-expanded repo right after connecting one).
+  const consumedRepoParam = useRef<string | null>(null)
   useEffect(() => {
     const repoParam = searchParams.get('repo')
     if (!repoParam || repos.length === 0) return
+    if (consumedRepoParam.current === repoParam) return
     const target = repos.find(r => String(r.id) === repoParam)
     if (target && selectedRepo?.id !== target.id) {
+      consumedRepoParam.current = repoParam
       setSelectedRepo(target)
       loadStats(target.id)
     }
@@ -297,17 +318,28 @@ export default function Workspace() {
                       <div className="flex items-center gap-3 bg-white rounded-lg border border-gray-200 p-3">
                         <Globe className="w-4 h-4 text-gray-400" />
                         <span className="text-sm text-gray-600">Target Domain:</span>
-                        <span className="text-sm font-mono font-medium text-primary-600 bg-primary-50 px-2 py-0.5 rounded">
-                          {repo.target_domain || 'http://localhost:5173'}
-                        </span>
+                        {repo.target_domain ? (
+                          <span className="text-sm font-mono font-medium text-primary-600 bg-primary-50 px-2 py-0.5 rounded">
+                            {repo.target_domain}
+                          </span>
+                        ) : (
+                          <span className="text-sm font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                            Not configured
+                          </span>
+                        )}
                         <div className="ml-auto">
-                          <RepoSettingsDialog repo={repo} onSaved={() => fetchRepos()} />
+                          <RepoSettingsDialog
+                            repo={repo}
+                            onSaved={() => fetchRepos()}
+                            open={settingsOpenRepoId === repo.id}
+                            onOpenChange={o => setSettingsOpenRepoId(o ? repo.id : null)}
+                          />
                         </div>
                       </div>
-                      {(!repo.target_domain || repo.target_domain === 'http://localhost:5173') && (
+                      {!repo.target_domain && (
                         <p className="text-xs text-amber-600 inline-flex items-center gap-1">
                           <Globe className="w-3 h-3" />
-                          Targeting localhost. If your app runs elsewhere, set a target domain so tests hit the right URL.
+                          No target URL set — test runs are disabled until you set one.
                         </p>
                       )}
                     </div>
@@ -316,7 +348,7 @@ export default function Workspace() {
                     <TestCaseList
                       repoId={repo.id}
                       branch={repo.default_branch}
-                      targetDomain={repo.target_domain || 'http://localhost:5173'}
+                      targetDomain={repo.target_domain}
                       globalInstruction={repo.global_instruction}
                       onReload={() => loadStats(repo.id)}
                       focusTestCaseId={

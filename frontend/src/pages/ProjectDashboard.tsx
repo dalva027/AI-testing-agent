@@ -159,11 +159,20 @@ export default function ProjectDashboard() {
               <span className="truncate">{repo.full_name}</span>
               <span>·</span>
               <span>{repo.default_branch}</span>
-              {repo.target_domain && (
+              {repo.target_domain ? (
                 <span className="inline-flex items-center gap-1.5 font-mono text-xs text-primary-600 bg-primary-50 px-2 py-0.5 rounded">
                   <Globe className="w-3 h-3" />
                   {repo.target_domain}
                 </span>
+              ) : (
+                <Link
+                  to={`/workspace?repo=${repo.id}`}
+                  title="Open repository settings to set a target URL"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full hover:bg-amber-200 transition-colors"
+                >
+                  <Globe className="w-3 h-3" />
+                  No target URL — runs disabled
+                </Link>
               )}
             </div>
           </div>

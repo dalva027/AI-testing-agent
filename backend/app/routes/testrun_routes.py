@@ -31,6 +31,7 @@ async def run_test_cases(
         mode=body.mode,
         heal=body.heal,
         custom_prompt=body.custom_prompt,
+        generate_only=body.generate_only,
     )
 
 

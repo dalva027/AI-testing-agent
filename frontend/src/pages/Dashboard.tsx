@@ -155,8 +155,8 @@ export default function Dashboard() {
     { label: 'Connect GitHub', done: !!token },
     { label: 'Add a repository', done: repos.length > 0 },
     {
-      label: 'Set a target domain (Workspace → repo settings)',
-      done: repos.some(r => !!r.target_domain && r.target_domain !== 'http://localhost:5173'),
+      label: 'Set a target URL (Workspace → repo settings)',
+      done: repos.some(r => !!r.target_domain),
     },
     { label: 'Generate test cases', done: testCases.length > 0 },
     { label: 'Run a test', done: testCases.some(tc => tc.status === 'passed' || tc.status === 'failed') },

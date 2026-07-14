@@ -17,7 +17,6 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-const DEFAULT_BASE_URL = 'http://localhost:5173'
 // Credits charged per test run (mirrors backend RUN_COST).
 const RUN_COST = 3
 // Extra charged repair attempts a failed run may spend (mirrors backend MAX_HEAL_ATTEMPTS).
@@ -52,7 +51,9 @@ interface TestCase {
 }
 
 interface Repo {
-  target_domain?: string
+  // null = no target URL configured: execution is blocked (server-enforced),
+  // but generate-only script requests still work.
+  target_domain: string | null
   global_instruction?: string | null
 }
 
@@ -65,14 +66,14 @@ interface Props {
   // Begin executing immediately on open (used for single-test "Run Test").
   autoStart?: boolean
   // Fired once when a batch finishes, for a completion toast in the parent.
-  onComplete?: (summary: { passed: number; failed: number; total: number; durationMs: number }) => void
+  onComplete?: (summary: { passed: number; failed: number; generated: number; total: number; durationMs: number }) => void
   // Called with the user's new credit balance after a run charges credits.
   onCreditsChange?: (credits: number) => void
 }
 
 type RunResult = {
   testCaseId: number
-  status: 'idle' | 'generating' | 'running' | 'passed' | 'failed'
+  status: 'idle' | 'generating' | 'running' | 'passed' | 'failed' | 'script_generated'
   logs: string[]
   error?: string
   sessionUrl?: string
@@ -83,7 +84,7 @@ type RunResult = {
 }
 
 export default function TestCaseExecutionModal({ isOpen, onClose, testCases, repository, autoStart = false, onComplete, onCreditsChange }: Props) {
-  const [baseUrl, setBaseUrl] = useState(repository.target_domain || DEFAULT_BASE_URL)
+  const [baseUrl, setBaseUrl] = useState(repository.target_domain ?? '')
   const [currentIdx, setCurrentIdx] = useState(-1)
   const [isExecuting, setIsExecuting] = useState(false)
   const [results, setResults] = useState<Record<number, RunResult>>({})
@@ -94,9 +95,16 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
   const [showOptions, setShowOptions] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [batchDone, setBatchDone] = useState(false)
+  // Generate + cache scripts without executing (the only batch type available
+  // while the repo has no target URL; also offered under Options).
+  const [generateOnly, setGenerateOnly] = useState(false)
   const consoleRef = useRef<HTMLDivElement>(null)
   const ranRef = useRef(false)
   const openedRef = useRef(false)
+
+  // No target URL configured for the repo: execution is blocked (the server
+  // enforces this too); only generate-only batches are allowed.
+  const runsBlocked = !repository.target_domain
 
   // Initialise exactly once per open. Without the openedRef guard, any parent
   // re-render that changes a prop reference (the inline `repository` object, or a
@@ -123,13 +131,15 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
     })
     setResults(initial)
     setSelectedDetail(testCases[0]?.id ?? null)
-    const resolvedUrl = repository.target_domain || DEFAULT_BASE_URL
+    const resolvedUrl = repository.target_domain ?? ''
     setBaseUrl(resolvedUrl)
     setBatchDone(false)
+    setGenerateOnly(false)
     ranRef.current = false
     // Auto-start kicks off execution from the first test case — but only if the
-    // target URL is valid; otherwise wait for the user to fix it and press Run.
-    const canAutoStart = autoStart && isValidHttpUrl(resolvedUrl)
+    // repo has a valid target URL; otherwise open idle so the user sees the
+    // blocked state (they can still generate scripts).
+    const canAutoStart = autoStart && !!repository.target_domain && isValidHttpUrl(resolvedUrl)
     setCurrentIdx(canAutoStart ? 0 : -1)
     setIsExecuting(canAutoStart)
   }, [isOpen, testCases, repository, autoStart])
@@ -145,7 +155,7 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
       const tc = testCases[currentIdx]
       setSelectedDetail(tc.id)
 
-      const needsRegen = executionMode === 'generate' || !results[tc.id]?.playwrightScript
+      const needsRegen = generateOnly || executionMode === 'generate' || !results[tc.id]?.playwrightScript
 
       setResults(prev => ({
         ...prev,
@@ -153,7 +163,9 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
           ...prev[tc.id],
           status: needsRegen ? 'generating' : 'running',
           logs: [
-            needsRegen
+            generateOnly
+              ? '[SYSTEM] Generating Playwright script (no browser execution)...'
+              : needsRegen
               ? '[SYSTEM] Analyzing code and generating Playwright script...'
               : '[SYSTEM] Using cached Playwright script, preparing execution...',
           ],
@@ -161,13 +173,22 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
       }))
 
       try {
-        const res = await axios.post('/api/test-cases/run', {
-          test_case_ids: [tc.id],
-          base_url: baseUrl.trim(),
-          mode: executionMode,
-          custom_prompt: customPrompt || undefined,
-          heal: selfHeal,
-        })
+        const res = await axios.post(
+          '/api/test-cases/run',
+          generateOnly
+            ? {
+                test_case_ids: [tc.id],
+                generate_only: true,
+                custom_prompt: customPrompt || undefined,
+              }
+            : {
+                test_case_ids: [tc.id],
+                base_url: baseUrl.trim(),
+                mode: executionMode,
+                custom_prompt: customPrompt || undefined,
+                heal: selfHeal,
+              }
+        )
 
         if (typeof res.data.credits === 'number') onCreditsChange?.(res.data.credits)
         const result = res.data.results?.[0]
@@ -203,7 +224,7 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
     }
 
     runTest()
-  }, [isExecuting, currentIdx, testCases, baseUrl, executionMode, customPrompt, selfHeal])
+  }, [isExecuting, currentIdx, testCases, baseUrl, executionMode, customPrompt, selfHeal, generateOnly])
 
   // Elapsed-time counter for the currently running test (resets per test).
   useEffect(() => {
@@ -228,16 +249,20 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
     if (el) el.scrollTop = el.scrollHeight
   }, [results, selectedDetail])
 
-  const handleStart = () => {
-    if (testCases.length === 0 || !isValidHttpUrl(baseUrl)) return
+  const handleStart = (genOnly = false) => {
+    if (testCases.length === 0) return
+    if (!genOnly && (runsBlocked || !isValidHttpUrl(baseUrl))) return
+    setGenerateOnly(genOnly)
     setBatchDone(false)
     setCurrentIdx(0)
     setIsExecuting(true)
   }
 
   // Reset prior results to idle and run the whole selected batch again.
-  const handleRunAgain = () => {
-    if (testCases.length === 0 || !isValidHttpUrl(baseUrl)) return
+  const handleRunAgain = (genOnly = false) => {
+    if (testCases.length === 0) return
+    if (!genOnly && (runsBlocked || !isValidHttpUrl(baseUrl))) return
+    setGenerateOnly(genOnly)
     setBatchDone(false)
     const reset: Record<number, RunResult> = {}
     testCases.forEach(tc => {
@@ -273,6 +298,7 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
     onComplete?.({
       passed: rs.filter(r => r.status === 'passed').length,
       failed: rs.filter(r => r.status === 'failed').length,
+      generated: rs.filter(r => r.status === 'script_generated').length,
       total: testCases.length,
       durationMs: rs.reduce((acc, r) => acc + (r.duration_ms || 0), 0),
     })
@@ -284,13 +310,13 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
   const currentResult = selectedDetail ? results[selectedDetail] : null
   const currentTestCase = testCases.find(tc => tc.id === selectedDetail)
   const baseUrlValid = isValidHttpUrl(baseUrl)
-  const isLocalhostDefault = baseUrl.trim() === DEFAULT_BASE_URL
 
   const summary = (() => {
     const rs = testCases.map(tc => results[tc.id]).filter(Boolean) as RunResult[]
     return {
       passed: rs.filter(r => r.status === 'passed').length,
       failed: rs.filter(r => r.status === 'failed').length,
+      generated: rs.filter(r => r.status === 'script_generated').length,
       durationMs: rs.reduce((acc, r) => acc + (r.duration_ms || 0), 0),
     }
   })()
@@ -311,12 +337,12 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Test Execution</h3>
             <p className="text-sm text-gray-500 mt-0.5">
-              {testCases.length} test case{testCases.length > 1 ? 's' : ''} • {baseUrl}
+              {testCases.length} test case{testCases.length > 1 ? 's' : ''} • {runsBlocked ? 'no target URL' : baseUrl}
             </p>
-            {isLocalhostDefault && (
+            {runsBlocked && (
               <p className="text-xs text-amber-600 mt-1 inline-flex items-center gap-1">
                 <AlertTriangle className="w-3 h-3" />
-                Targeting default localhost — set the repo's target domain if your app runs elsewhere.
+                No target URL configured — execution is disabled. Set it in repository settings. You can still generate scripts.
               </p>
             )}
           </div>
@@ -328,12 +354,21 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
         {batchDone && (
           <div className="px-5 py-3 border-b border-gray-200 bg-gray-50 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm shrink-0">
             <span className="font-medium text-gray-900">Run complete</span>
-            <span className="inline-flex items-center gap-1 text-emerald-600">
-              <CheckCircle2 className="w-4 h-4" /> {summary.passed} passed
-            </span>
-            <span className="inline-flex items-center gap-1 text-rose-600">
-              <XCircle className="w-4 h-4" /> {summary.failed} failed
-            </span>
+            {summary.generated > 0 && (
+              <span className="inline-flex items-center gap-1 text-blue-800">
+                <Code className="w-4 h-4" /> {summary.generated} script{summary.generated > 1 ? 's' : ''} generated
+              </span>
+            )}
+            {(summary.passed > 0 || summary.failed > 0 || summary.generated === 0) && (
+              <>
+                <span className="inline-flex items-center gap-1 text-emerald-600">
+                  <CheckCircle2 className="w-4 h-4" /> {summary.passed} passed
+                </span>
+                <span className="inline-flex items-center gap-1 text-rose-600">
+                  <XCircle className="w-4 h-4" /> {summary.failed} failed
+                </span>
+              </>
+            )}
             <span className="text-gray-500">{Math.round(summary.durationMs)}ms total</span>
           </div>
         )}
@@ -357,15 +392,18 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
                 type="text"
                 value={baseUrl}
                 onChange={e => setBaseUrl(e.target.value)}
-                className={`input text-sm font-mono ${!baseUrlValid ? 'border-rose-400 focus:ring-rose-500' : ''}`}
-                placeholder="http://localhost:5173"
+                disabled={runsBlocked}
+                className={`input text-sm font-mono disabled:opacity-60 disabled:cursor-not-allowed ${!runsBlocked && !baseUrlValid ? 'border-rose-400 focus:ring-rose-500' : ''}`}
+                placeholder={runsBlocked ? 'No target URL configured' : 'https://your-app.example.com'}
               />
-              {!baseUrlValid && (
+              {!runsBlocked && !baseUrlValid && (
                 <p className="text-xs text-rose-600">Enter a valid URL starting with http:// or https://</p>
               )}
               <p className="text-xs text-gray-500">
-                Each test run costs {RUN_COST} credits.
-                {selfHeal && ` Failed runs self-heal (up to ${MAX_HEAL_ATTEMPTS} retries, ${RUN_COST} credits each).`}
+                {runsBlocked
+                  ? `Each script generation costs ${RUN_COST} credits.`
+                  : `Each test run costs ${RUN_COST} credits.`}
+                {!runsBlocked && selfHeal && ` Failed runs self-heal (up to ${MAX_HEAL_ATTEMPTS} retries, ${RUN_COST} credits each).`}
               </p>
               {showOptions && (
                 <div className="space-y-3">
@@ -405,6 +443,16 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
                       placeholder="Additional instructions for the AI..."
                     />
                   </div>
+                  {!runsBlocked && !isExecuting && (
+                    <button
+                      onClick={() => (allDone ? handleRunAgain(true) : handleStart(true))}
+                      title="Generate and cache scripts without executing them"
+                      className="btn-secondary w-full justify-center inline-flex items-center gap-2 text-sm"
+                    >
+                      <Code className="w-4 h-4" />
+                      Generate scripts only (no run)
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -437,6 +485,8 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
                         <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                       ) : isCompleted && r.status === 'failed' ? (
                         <XCircle className="w-4 h-4 text-rose-600" />
+                      ) : isCompleted && r.status === 'script_generated' ? (
+                        <Code className="w-4 h-4 text-blue-800" />
                       ) : (
                         <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
                       )}
@@ -453,11 +503,12 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
                         <span className={`text-[10px] px-1.5 py-0.5 rounded ${
                           r.status === 'passed' ? 'bg-emerald-100 text-emerald-700' :
                           r.status === 'failed' ? 'bg-rose-100 text-rose-700' :
+                          r.status === 'script_generated' ? 'bg-blue-100 text-blue-800' :
                           r.status === 'generating' ? 'bg-blue-100 text-blue-700' :
                           r.status === 'running' ? 'bg-amber-100 text-amber-700' :
                           'bg-gray-100 text-gray-500'
                         }`}>
-                          {r.status}
+                          {r.status === 'script_generated' ? 'script ready' : r.status}
                         </span>
                       )}
                     </div>
@@ -470,9 +521,13 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
             <div className="p-4 border-t border-gray-200 flex items-center gap-3 shrink-0">
               {allDone ? (
                 <>
-                  <button onClick={handleRunAgain} disabled={!baseUrlValid} className="btn-primary flex-1 justify-center">
+                  <button
+                    onClick={() => handleRunAgain(runsBlocked)}
+                    disabled={!runsBlocked && !baseUrlValid}
+                    className="btn-primary flex-1 justify-center"
+                  >
                     <RotateCcw className="w-4 h-4" />
-                    Run Again
+                    {runsBlocked ? 'Generate Again' : 'Run Again'}
                   </button>
                   <button onClick={onClose} className="btn-secondary justify-center">
                     <CheckCircle2 className="w-4 h-4" />
@@ -485,13 +540,17 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
                     Stop after current
                   </button>
                   <span className="text-xs text-gray-500">
-                    Running {currentIdx + 1}/{testCases.length} · {elapsed}s
+                    {generateOnly ? 'Generating' : 'Running'} {currentIdx + 1}/{testCases.length} · {elapsed}s
                   </span>
                 </>
               ) : (
-                <button onClick={handleStart} disabled={!baseUrlValid} className="btn-primary flex-1 justify-center">
-                  <Play className="w-4 h-4" />
-                  Run All
+                <button
+                  onClick={() => handleStart(runsBlocked)}
+                  disabled={!runsBlocked && !baseUrlValid}
+                  className="btn-primary flex-1 justify-center"
+                >
+                  {runsBlocked ? <Code className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                  {runsBlocked ? 'Generate Scripts' : 'Run All'}
                 </button>
               )}
             </div>
@@ -508,11 +567,12 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                       currentResult.status === 'passed' ? 'bg-emerald-100 text-emerald-700' :
                       currentResult.status === 'failed' ? 'bg-rose-100 text-rose-700' :
+                      currentResult.status === 'script_generated' ? 'bg-blue-100 text-blue-800' :
                       currentResult.status === 'generating' ? 'bg-blue-100 text-blue-700' :
                       currentResult.status === 'running' ? 'bg-amber-100 text-amber-700' :
                       'bg-gray-100 text-gray-500'
                     }`}>
-                      {currentResult.status}
+                      {currentResult.status === 'script_generated' ? 'script ready' : currentResult.status}
                     </span>
                     {currentResult.healed && (
                       <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-teal-100 text-teal-700">

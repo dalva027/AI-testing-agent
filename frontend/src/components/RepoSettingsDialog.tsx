@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -28,14 +28,39 @@ interface Props {
     global_instruction: string | null
   }
   onSaved: () => void
+  // Optional controlled mode, used by Workspace to auto-open the dialog right
+  // after a repo is connected. Omit both to keep the self-managed gear button.
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
-export default function RepoSettingsDialog({ repo, onSaved }: Props) {
-  const [open, setOpen] = useState(false)
-  const [targetDomain, setTargetDomain] = useState(repo.target_domain || 'http://localhost:5173')
+export default function RepoSettingsDialog({ repo, onSaved, open, onOpenChange }: Props) {
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isControlled = open !== undefined
+  const isOpen = isControlled ? open : internalOpen
+  const setOpen = (o: boolean) => {
+    if (!isControlled) setInternalOpen(o)
+    onOpenChange?.(o)
+  }
+
+  const [targetDomain, setTargetDomain] = useState(repo.target_domain || '')
   const [globalInstruction, setGlobalInstruction] = useState(repo.global_instruction || '')
   const [saving, setSaving] = useState(false)
-  const targetDomainValid = isValidHttpUrl(targetDomain)
+
+  // Re-sync from the repo each time the dialog opens: the component stays
+  // mounted while closed, so state would otherwise go stale after saves.
+  useEffect(() => {
+    if (isOpen) {
+      setTargetDomain(repo.target_domain || '')
+      setGlobalInstruction(repo.global_instruction || '')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen])
+
+  // Empty is allowed (leaves the URL unset — runs stay disabled); anything
+  // typed must be a valid http(s) URL.
+  const trimmedDomain = targetDomain.trim()
+  const targetDomainValid = trimmedDomain === '' || isValidHttpUrl(trimmedDomain)
 
   const handleSave = async () => {
     if (!targetDomainValid) {
@@ -45,7 +70,7 @@ export default function RepoSettingsDialog({ repo, onSaved }: Props) {
     setSaving(true)
     try {
       await axios.patch(`/api/repos/${repo.id}`, {
-        target_domain: targetDomain.trim(),
+        target_domain: trimmedDomain || null,
         global_instruction: globalInstruction || null,
       })
       toast.success('Repository settings saved')
@@ -59,7 +84,7 @@ export default function RepoSettingsDialog({ repo, onSaved }: Props) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={isOpen} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <button aria-label="Repository settings" className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
           <Settings className="w-4 h-4" />
@@ -80,15 +105,18 @@ export default function RepoSettingsDialog({ repo, onSaved }: Props) {
             </label>
             <input
               type="text"
+              autoFocus
               value={targetDomain}
               onChange={e => setTargetDomain(e.target.value)}
               className={`input font-mono text-sm ${!targetDomainValid ? 'border-rose-400 focus:ring-rose-500' : ''}`}
-              placeholder="http://localhost:5173"
+              placeholder="https://your-app.example.com"
             />
-            {targetDomainValid ? (
-              <p className="text-xs text-gray-500">The URL where your app is running for testing</p>
-            ) : (
+            {!targetDomainValid ? (
               <p className="text-xs text-rose-600">Enter a valid URL starting with http:// or https://</p>
+            ) : trimmedDomain === '' ? (
+              <p className="text-xs text-amber-700">Test runs are disabled until this is set.</p>
+            ) : (
+              <p className="text-xs text-gray-500">The URL where your app is running for testing</p>
             )}
           </div>
           <div className="space-y-2">

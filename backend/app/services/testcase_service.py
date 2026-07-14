@@ -71,7 +71,7 @@ async def generate_test_cases_for_repo(
         global_instruction=instruction,
         repo_name=repo.name,
         repo_owner=repo.owner,
-        target_domain=repo.target_domain or "http://localhost:5173",
+        target_domain=repo.target_domain or "(not configured yet)",
     )
 
     if not ai_test_cases:

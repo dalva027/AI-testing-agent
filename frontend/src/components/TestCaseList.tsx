@@ -44,7 +44,9 @@ interface TestCase {
 interface Props {
   repoId: number
   branch: string
-  targetDomain: string
+  // null = no target URL configured: script generation stays available but
+  // browser execution is blocked (mirrors the server-side guard).
+  targetDomain: string | null
   globalInstruction: string | null
   onReload: () => void
   focusTestCaseId?: number | null
@@ -68,6 +70,8 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
   const [statusFilter, setStatusFilter] = useState('all')
   // Test case awaiting delete confirmation (null = dialog closed).
   const [confirmDelete, setConfirmDelete] = useState<TestCase | null>(null)
+
+  const runsBlocked = !targetDomain
 
   const fetchTestCases = async () => {
     setLoading(true)
@@ -451,11 +455,15 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
                   <div className="flex justify-end">
                     <button
                       onClick={() => runSingleTest(tc.id)}
-                      title={`Costs ${RUN_COST} credits`}
+                      title={
+                        runsBlocked
+                          ? `Execution disabled — no target URL configured. Generates and caches the script only (costs ${RUN_COST} credits).`
+                          : `Costs ${RUN_COST} credits`
+                      }
                       className="btn-primary inline-flex items-center gap-2 text-sm"
                     >
-                      <Play className="w-4 h-4" />
-                      Run Test
+                      {runsBlocked ? <Sparkles className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                      {runsBlocked ? 'Generate Script' : 'Run Test'}
                     </button>
                   </div>
                 </div>
@@ -484,10 +492,11 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
               </button>
               <button
                 onClick={() => { setSingleRunId(null); setExecutionModalOpen(true) }}
+                title={runsBlocked ? 'Execution disabled — no target URL configured. Generates and caches scripts only.' : undefined}
                 className="btn-primary inline-flex items-center gap-2"
               >
-                <Play className="w-4 h-4" />
-                Run Selected
+                {runsBlocked ? <Sparkles className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                {runsBlocked ? 'Generate Scripts' : 'Run Selected'}
               </button>
             </div>
           </div>
@@ -500,9 +509,11 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
         testCases={modalTestCases}
         autoStart={singleRunId != null}
         onComplete={s =>
-          toast[s.failed > 0 ? 'error' : 'success'](
-            `Run complete — ${s.passed} passed, ${s.failed} failed`
-          )
+          s.passed + s.failed === 0 && s.generated > 0
+            ? toast.success(`${s.generated} script${s.generated > 1 ? 's' : ''} generated`)
+            : toast[s.failed > 0 ? 'error' : 'success'](
+                `Run complete — ${s.passed} passed, ${s.failed} failed`
+              )
         }
         onCreditsChange={c => { if (user) setUser({ ...user, credits: c }) }}
         repository={modalRepository}

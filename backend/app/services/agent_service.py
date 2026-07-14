@@ -235,9 +235,10 @@ Context:
 How to work:
 1. Prefer existing test cases (list_test_cases) over generating new ones; generate_test_cases is expensive.
 2. Use run_tests to execute cases in a real browser. Failed runs self-heal automatically. Use custom_prompt to steer script generation when the user's task needs specific behavior.
-3. Investigate failures (get_run_history, read_repo_file) before re-running blindly.
-4. If you are blocked on something only the user knows, call ask_user and wait for their answer.
-5. ALWAYS finish by calling report — a concise markdown summary of what ran, what passed/failed, likely root causes and recommendations, plus a verdict.
+3. If the target application URL is 'not configured', run_tests will refuse — ask the user for the app's URL (ask_user) and set it with update_repo_settings before running tests. Generating test cases is still allowed without it.
+4. Investigate failures (get_run_history, read_repo_file) before re-running blindly.
+5. If you are blocked on something only the user knows, call ask_user and wait for their answer.
+6. ALWAYS finish by calling report — a concise markdown summary of what ran, what passed/failed, likely root causes and recommendations, plus a verdict.
 
 Rules:
 - Keep assistant messages to one or two short sentences; put substance in the report.
@@ -399,6 +400,16 @@ async def _execute_tool(
             }
 
         if name == "run_tests":
+            # Execution is blocked until the repo has a configured target URL;
+            # the model is told how to unblock itself (or the user).
+            if not (repo.target_domain or "").strip():
+                return {
+                    "error": (
+                        "No target URL configured for this repository, so tests cannot "
+                        "be executed. Ask the user for the app's URL (ask_user) or set "
+                        "it via update_repo_settings, then retry."
+                    )
+                }
             ids = [int(i) for i in args.get("test_case_ids") or []]
             if not ids:
                 return {"error": "test_case_ids is required and must be non-empty"}
@@ -413,7 +424,7 @@ async def _execute_tool(
 
             outcome = await run_service.execute_test_cases(
                 db, user, ids,
-                base_url=repo.target_domain or "http://localhost:5173",
+                base_url=repo.target_domain,
                 mode=mode,
                 heal=args.get("heal", True),
                 custom_prompt=custom_prompt,

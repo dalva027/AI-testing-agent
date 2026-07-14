@@ -88,10 +88,11 @@ async def execute_test_cases(
     db: AsyncSession,
     user: User,
     test_case_ids: list[int],
-    base_url: str,
+    base_url: str | None,
     mode: str = "generate",
     heal: bool = True,
     custom_prompt: str | None = None,
+    generate_only: bool = False,
     on_progress: Optional[ProgressCallback] = None,
 ) -> dict:
     """Run a batch of test cases and return {"results": [...], "credits": int}.
@@ -101,6 +102,12 @@ async def execute_test_cases(
     charged attempts. Every attempt is persisted as its own TestRun row so repairs
     stay auditable. Only reads user.id / user.github_access_token / user.credits,
     so callers may pass a User loaded from any session.
+
+    Execution requires a target URL: repo-linked cases must have the repo's
+    target_domain configured (a provided base_url overrides the URL used but
+    never bypasses that guard); blocked cases fail without being charged.
+    With generate_only=True the script is generated and cached but never
+    executed (no TestRun row, tc.status untouched) — allowed with no URL.
     """
     results = []
     access_token = user.github_access_token
@@ -118,6 +125,54 @@ async def execute_test_cases(
         if not tc:
             continue
 
+        # Fetch the repo first: both the target-URL guard and the global
+        # instruction need it (only when the test case is linked to one).
+        repo = None
+        if tc.repo_id:
+            repo_result = await db.execute(
+                select(Repository).where(
+                    Repository.id == tc.repo_id, Repository.user_id == user.id
+                )
+            )
+            repo = repo_result.scalar_one_or_none()
+        global_instruction = repo.global_instruction if repo else None
+
+        # Execution needs a target URL; script generation doesn't. Guarded
+        # BEFORE charging so blocked cases never cost credits.
+        if not generate_only:
+            if tc.repo_id and (repo is None or not (repo.target_domain or "").strip()):
+                results.append({
+                    "test_case_id": tc_id,
+                    "status": "failed",
+                    "logs": [
+                        "[SYSTEM ERROR] No target URL configured for this repository. "
+                        "Set it in repository settings before running tests."
+                    ],
+                    "error": "No target URL configured",
+                    "heal_attempts": 0,
+                    "healed": False,
+                })
+                continue
+            if not tc.repo_id and not (base_url or "").strip():
+                results.append({
+                    "test_case_id": tc_id,
+                    "status": "failed",
+                    "logs": ["[SYSTEM ERROR] No base URL provided for this test case."],
+                    "error": "No base URL provided",
+                    "heal_attempts": 0,
+                    "healed": False,
+                })
+                continue
+
+        # A request-provided base_url overrides the repo's configured target for
+        # this run. Generation prompts get an honest placeholder when neither is
+        # known yet (generated scripts navigate by relative paths, so a missing
+        # URL only affects prompt context, not the script's correctness).
+        exec_base_url = (base_url or "").strip() or (
+            (repo.target_domain or "").strip() if repo else ""
+        )
+        prompt_base_url = exec_base_url or "(not configured yet)"
+
         # Charge per test run up front. Refunded below if we can't produce a script.
         balance = await charge_credits(db, user.id, RUN_COST)
         if balance is None:
@@ -130,18 +185,10 @@ async def execute_test_cases(
             continue
         remaining_credits = balance
 
-        await progress(f"Running test case #{tc.id}: {tc.title}")
-
-        # Fetch repo for global instruction (only when the test case is linked to one).
-        global_instruction = None
-        if tc.repo_id:
-            repo_result = await db.execute(
-                select(Repository).where(
-                    Repository.id == tc.repo_id, Repository.user_id == user.id
-                )
-            )
-            repo = repo_result.scalar_one_or_none()
-            global_instruction = repo.global_instruction if repo else None
+        if generate_only:
+            await progress(f"Generating script for test case #{tc.id}: {tc.title}")
+        else:
+            await progress(f"Running test case #{tc.id}: {tc.title}")
 
         # Get target file contents for additional context.
         target_files = []
@@ -163,10 +210,11 @@ async def execute_test_cases(
 
         # Generate or reuse the cached script. Regeneration is informed by the most
         # recent failed run (failure memory), so the model repairs the last mistake
-        # instead of guessing the same way twice at temperature 0.
+        # instead of guessing the same way twice at temperature 0. generate_only
+        # always regenerates (that is the point of the request).
         script = tc.playwright_script
         all_logs: list[str] = []
-        if mode == "generate" or not script:
+        if generate_only or mode == "generate" or not script:
             failure_context = await _last_failure(db, tc.id, user.id)
             if failure_context:
                 all_logs.append("[SYSTEM] Regenerating with failure memory from the last failed run")
@@ -175,7 +223,7 @@ async def execute_test_cases(
                     test_case=tc_payload,
                     target_files=target_files,
                     global_instruction=global_instruction,
-                    base_url=base_url,
+                    base_url=prompt_base_url,
                     failure_context=failure_context,
                     custom_prompt=custom_prompt,
                 )
@@ -200,6 +248,25 @@ async def execute_test_cases(
             tc.playwright_script = script
             await db.commit()
 
+        # Generate-only: the cached script IS the deliverable. No browser run,
+        # no TestRun row, and tc.status/logs stay whatever the last real run set.
+        if generate_only:
+            all_logs.append(
+                "[SYSTEM] Script generated and cached — no browser execution (generate-only)."
+            )
+            await progress(f"Test case #{tc.id}: script generated (no run)")
+            results.append({
+                "test_case_id": tc_id,
+                "status": "script_generated",
+                "logs": all_logs,
+                "error": None,
+                "playwright_script": script,
+                "duration_ms": None,
+                "heal_attempts": 0,
+                "healed": False,
+            })
+            continue
+
         # Execute in a real browser (isolated subprocess). On failure, self-heal:
         # regenerate the script from the failure output and re-run, up to
         # MAX_HEAL_ATTEMPTS extra charged attempts. Every attempt is persisted as
@@ -208,7 +275,7 @@ async def execute_test_cases(
         heal_attempts = 0
         total_duration = 0.0
         while True:
-            exec_result = await run_playwright_test(script, base_url)
+            exec_result = await run_playwright_test(script, exec_base_url)
             status = "passed" if exec_result["success"] else "failed"
             attempt_logs = exec_result["logs"]
             all_logs.extend(attempt_logs)
@@ -251,7 +318,7 @@ async def execute_test_cases(
                     test_case=tc_payload,
                     target_files=target_files,
                     global_instruction=global_instruction,
-                    base_url=base_url,
+                    base_url=exec_base_url,
                     failure_context={"script": script, "logs": attempt_logs},
                     custom_prompt=custom_prompt,
                 )

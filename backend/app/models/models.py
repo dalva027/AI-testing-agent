@@ -34,7 +34,9 @@ class Repository(Base):
     language = Column(String, nullable=True)
     default_branch = Column(String, default="main")
     is_private = Column(Integer, default=0)
-    target_domain = Column(String, default="http://localhost:5173")
+    # NULL until the user explicitly sets it; test execution is blocked while
+    # unset (generation stays allowed). No silent localhost default.
+    target_domain = Column(String, nullable=True)
     global_instruction = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

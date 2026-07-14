@@ -108,12 +108,19 @@ class TestCaseUpdate(BaseModel):
 
 class TestRunRequest(BaseModel):
     test_case_ids: List[int]
-    base_url: str
+    # Optional so generate_only requests can omit it. For execution, repo-linked
+    # cases are guarded server-side on the repo's configured target URL; a
+    # provided base_url overrides that URL for the run but never bypasses the guard.
+    base_url: Optional[str] = None
     mode: str = "generate"
     custom_prompt: Optional[str] = None
     # When a run fails, regenerate the script from the failure output and re-run
     # (up to the server-side attempt cap; each attempt is charged like a run).
     heal: bool = True
+    # Generate + cache the Playwright script WITHOUT executing it in a browser.
+    # Ignores `mode` (always regenerates) and works without a target URL;
+    # charged like a run.
+    generate_only: bool = False
 
 
 class TestRunResult(BaseModel):

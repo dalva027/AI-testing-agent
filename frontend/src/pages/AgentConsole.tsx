@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import axios from 'axios'
 import {
+  AlertTriangle,
   ArrowLeft,
   Bot,
   CheckCircle2,
@@ -359,6 +360,18 @@ export default function AgentConsole() {
           New Task
         </button>
       </div>
+
+      {repo && !repo.target_domain && (
+        <div className="bg-amber-100 border border-amber-200 rounded-3xl px-4 py-3 flex items-center gap-2 text-sm text-amber-800">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          This repository has no target URL — the agent cannot execute tests until one is set
+          (it may ask you for it, or set it in{' '}
+          <Link to={`/workspace?repo=${repoId}`} className="underline font-medium">
+            repository settings
+          </Link>
+          ).
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Task list */}
