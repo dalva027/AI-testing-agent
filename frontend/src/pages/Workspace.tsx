@@ -61,6 +61,10 @@ export default function Workspace() {
 
   const fetchRepos = useCallback(async () => {
     if (!token) {
+      // Logged out (possibly mid-session): drop any data from the previous user.
+      setRepos([])
+      setSelectedRepo(null)
+      setStats(null)
       setLoading(false)
       return
     }

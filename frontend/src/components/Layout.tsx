@@ -1,6 +1,7 @@
 ﻿import { Outlet, Link, useLocation } from 'react-router-dom'
 import { Bug, LayoutDashboard, FolderGit2, BarChart3, LogOut, Sun, Moon } from 'lucide-react'
 import { useUser } from '../App'
+import { githubLoginUrl } from '../lib/api'
 
 export default function Layout() {
   const location = useLocation()
@@ -80,9 +81,11 @@ export default function Layout() {
                   <span className="hidden sm:inline">Logout</span>
                 </button>
               ) : (
-                <Link to="/workspace" className="btn-primary text-sm">
+                // Start the OAuth flow directly (full-page navigation to the
+                // backend) instead of routing to /workspace first.
+                <a href={githubLoginUrl} className="btn-primary text-sm">
                   Connect GitHub
-                </Link>
+                </a>
               )}
             </div>
           </div>
