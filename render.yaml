@@ -8,9 +8,11 @@ services:
     # execution is dispatched to GitHub Actions (TEST_RUNNER=github-actions).
     # If you switch TEST_RUNNER back to "local", move to starter or above —
     # browser runs OOM the 512 MB free instance. Free instances also spin down
-    # on idle (first request after a pause takes ~a minute) — the keep-alive
-    # workflow (.github/workflows/keep-alive.yml) pings /health every 10 min
-    # to prevent this.
+    # after 15 min without inbound traffic (first request after a pause takes
+    # ~a minute) — an external cron-job.org job pings /health every 5 min to
+    # prevent this (see devtools/DEPLOYMENT.md §2). GitHub Actions cron is NOT
+    # reliable enough for this: runs drift 10–30 min under load and schedules
+    # are disabled after 60 days of repo inactivity.
     plan: free
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
