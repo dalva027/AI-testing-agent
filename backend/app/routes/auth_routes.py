@@ -90,7 +90,7 @@ async def github_callback(
         # Hand the client only an app JWT, carried in the URL fragment (not sent to
         # servers or logged in Referer headers like a query string would be).
         app_token = create_access_token(user.id)
-        redirect_url = f"{settings.frontend_url}/workspace#token={app_token}"
+        redirect_url = f"{settings.frontend_url}/dashboard#token={app_token}"
         return HTMLResponse(f"""
         <html><head><title>Authenticating...</title>
         <script>window.location.replace("{redirect_url}");</script>
