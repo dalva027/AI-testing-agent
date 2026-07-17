@@ -77,11 +77,11 @@ export default function Landing() {
                 </a>
               )}
               <Link
-                to="/workspace"
+                to="/dashboard"
                 className="inline-flex items-center gap-2 bg-white/10 text-white font-semibold px-6 py-3 rounded-full hover:bg-white/20 transition-colors border border-white/15"
               >
                 <GitBranch className="w-5 h-5" />
-                Explore Workspace
+                Explore Projects
               </Link>
             </div>
 

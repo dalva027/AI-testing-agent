@@ -366,7 +366,7 @@ export default function AgentConsole() {
           <AlertTriangle className="w-4 h-4 shrink-0" />
           This repository has no target URL — the agent cannot execute tests until one is set
           (it may ask you for it, or set it in{' '}
-          <Link to={`/workspace?repo=${repoId}`} className="underline font-medium">
+          <Link to={`/dashboard/${repoId}?settings=1`} className="underline font-medium">
             repository settings
           </Link>
           ).

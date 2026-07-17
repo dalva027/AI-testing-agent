@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { githubLoginUrl } from '../lib/api'
 import {
   FolderGit2,
@@ -14,10 +14,13 @@ import {
   GitBranch,
   Circle,
   X,
+  Search,
+  Trash2,
 } from 'lucide-react'
 import axios from 'axios'
 import toast from 'react-hot-toast'
 import { useUser } from '../App'
+import ConfirmDialog from '../components/ui/ConfirmDialog'
 
 interface TestCase {
   id: number
@@ -72,10 +75,16 @@ function timeAgo(ts: number | null): string {
 
 export default function Dashboard() {
   const { user, token } = useUser()
+  const navigate = useNavigate()
   const [repos, setRepos] = useState<Repo[]>([])
   const [testCases, setTestCases] = useState<TestCase[]>([])
   const [loading, setLoading] = useState(true)
   const [gsDismissed, setGsDismissed] = useState(() => localStorage.getItem('qa-gs-dismissed') === '1')
+  const [showRepoDialog, setShowRepoDialog] = useState(false)
+  const [githubRepos, setGithubRepos] = useState<any[]>([])
+  const [githubLoading, setGithubLoading] = useState(false)
+  // Repo awaiting remove confirmation (null = dialog closed).
+  const [confirmRepo, setConfirmRepo] = useState<Repo | null>(null)
 
   const fetchData = useCallback(async () => {
     if (!token) {
@@ -102,6 +111,63 @@ export default function Dashboard() {
   useEffect(() => {
     fetchData()
   }, [fetchData])
+
+  const handleConnectGitHub = () => {
+    setShowRepoDialog(true)
+    fetchGithubRepos()
+  }
+
+  const fetchGithubRepos = async () => {
+    if (!token) return
+    setGithubLoading(true)
+    try {
+      const res = await axios.get('/api/repos/github')
+      setGithubRepos(res.data)
+    } catch {
+      toast.error('Failed to fetch GitHub repos')
+    } finally {
+      setGithubLoading(false)
+    }
+  }
+
+  const addRepo = async (ghRepo: any) => {
+    try {
+      const res = await axios.post('/api/repos', {
+        repo_id: ghRepo.id,
+        name: ghRepo.name,
+        full_name: ghRepo.full_name,
+        html_url: ghRepo.html_url,
+        owner: ghRepo.owner.login,
+        description: ghRepo.description,
+        language: ghRepo.language,
+        default_branch: ghRepo.default_branch,
+      })
+      toast.success(`Added ${ghRepo.full_name}`)
+      setShowRepoDialog(false)
+      // New repos have no target URL: send the user straight to the project
+      // page with the settings dialog auto-opened (runs are blocked until a
+      // target URL is set). Re-adding an already-configured repo returns the
+      // existing row → stay on the grid, no nag.
+      if (!res.data.target_domain) {
+        toast('Test runs are disabled until you set a target URL for this repo.', { icon: '⚠️' })
+        navigate(`/dashboard/${res.data.id}?settings=1`)
+      } else {
+        await fetchData()
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.detail || 'Failed to add repo')
+    }
+  }
+
+  const performRemoveRepo = async (repoId: number) => {
+    try {
+      await axios.delete(`/api/repos/${repoId}`)
+      toast.success('Repository removed')
+      fetchData()
+    } catch {
+      toast.error('Failed to remove repo')
+    }
+  }
 
   // ---- Not authenticated ----
   if (!token) {
@@ -155,7 +221,7 @@ export default function Dashboard() {
     { label: 'Connect GitHub', done: !!token },
     { label: 'Add a repository', done: repos.length > 0 },
     {
-      label: 'Set a target URL (Workspace → repo settings)',
+      label: 'Set a target URL (open a project → settings)',
       done: repos.some(r => !!r.target_domain),
     },
     { label: 'Generate test cases', done: testCases.length > 0 },
@@ -182,10 +248,10 @@ export default function Dashboard() {
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
-          <Link to="/workspace" className="btn-primary inline-flex items-center gap-2">
+          <button onClick={handleConnectGitHub} className="btn-primary inline-flex items-center gap-2">
             <Plus className="w-4 h-4" />
             Add Repository
-          </Link>
+          </button>
         </div>
       </div>
 
@@ -232,10 +298,10 @@ export default function Dashboard() {
             Add a repository and generate your first set of AI test cases — each project will show its
             coverage here.
           </p>
-          <Link to="/workspace" className="btn-primary inline-flex items-center gap-2">
+          <button onClick={handleConnectGitHub} className="btn-primary inline-flex items-center gap-2">
             <Plus className="w-4 h-4" />
             Add Your First Repository
-          </Link>
+          </button>
         </div>
       ) : (
         <>
@@ -277,7 +343,16 @@ export default function Dashboard() {
                         <p className="text-xs text-gray-400 truncate">{repo.full_name}</p>
                       </div>
                     </div>
-                    <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-primary-500 group-hover:translate-x-0.5 transition-all shrink-0 mt-1" />
+                    <div className="flex items-center gap-1 shrink-0 mt-1">
+                      <button
+                        onClick={e => { e.preventDefault(); e.stopPropagation(); setConfirmRepo(repo) }}
+                        aria-label="Remove repository"
+                        className="p-1.5 text-gray-300 hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-primary-500 group-hover:translate-x-0.5 transition-all" />
+                    </div>
                   </div>
 
                   {/* Meta */}
@@ -334,6 +409,65 @@ export default function Dashboard() {
           </div>
         </>
       )}
+
+      {/* GitHub Repo Selection Dialog */}
+      {showRepoDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col">
+            <div className="p-5 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Add Repository</h3>
+              <button onClick={() => setShowRepoDialog(false)} className="p-1 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search repos..."
+                  className="input pl-10"
+                  onKeyDown={e => {
+                    if (e.key === 'Escape') setShowRepoDialog(false)
+                  }}
+                />
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 pb-5">
+              {githubLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary-600" />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {githubRepos.map(repo => (
+                    <button
+                      key={repo.id}
+                      onClick={() => addRepo(repo)}
+                      className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-primary-300 hover:bg-primary-50/50 transition-all"
+                    >
+                      <div className="font-medium text-gray-900">{repo.full_name}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {repo.description || 'No description'} • {repo.language || 'Unknown'}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={confirmRepo !== null}
+        onOpenChange={open => { if (!open) setConfirmRepo(null) }}
+        title="Remove repository?"
+        description={confirmRepo ? `${confirmRepo.full_name} and its test cases will be removed from your projects.` : undefined}
+        confirmLabel="Remove"
+        destructive
+        onConfirm={() => { if (confirmRepo) performRemoveRepo(confirmRepo.id) }}
+      />
     </div>
   )
 }

@@ -1,5 +1,5 @@
 ﻿import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Bug, LayoutDashboard, FolderGit2, BarChart3, LogOut, Sun, Moon } from 'lucide-react'
+import { Bug, LayoutDashboard, BarChart3, LogOut, Sun, Moon } from 'lucide-react'
 import { useUser } from '../App'
 import { githubLoginUrl } from '../lib/api'
 
@@ -9,7 +9,6 @@ export default function Layout() {
 
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { path: '/workspace', label: 'Workspace', icon: FolderGit2 },
     { path: '/results', label: 'Test Results', icon: BarChart3 },
   ]
 
@@ -82,7 +81,7 @@ export default function Layout() {
                 </button>
               ) : (
                 // Start the OAuth flow directly (full-page navigation to the
-                // backend) instead of routing to /workspace first.
+                // backend) instead of routing to /dashboard first.
                 <a href={githubLoginUrl} className="btn-primary text-sm">
                   Connect GitHub
                 </a>

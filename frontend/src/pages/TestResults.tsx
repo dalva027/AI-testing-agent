@@ -426,8 +426,8 @@ export default function TestResults() {
                 {filtered.map(tc => (
                   <tr
                     key={tc.id}
-                    onClick={() => { if (tc.repo_id) navigate(`/workspace?repo=${tc.repo_id}&tc=${tc.id}`) }}
-                    title={tc.repo_id ? 'Open in workspace' : undefined}
+                    onClick={() => { if (tc.repo_id) navigate(`/dashboard/${tc.repo_id}?tc=${tc.id}`) }}
+                    title={tc.repo_id ? 'Open in project dashboard' : undefined}
                     className={`transition-colors ${tc.repo_id ? 'hover:bg-gray-50 cursor-pointer' : ''}`}
                   >
                     <td className="px-5 py-4">

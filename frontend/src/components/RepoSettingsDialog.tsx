@@ -28,8 +28,9 @@ interface Props {
     global_instruction: string | null
   }
   onSaved: () => void
-  // Optional controlled mode, used by Workspace to auto-open the dialog right
-  // after a repo is connected. Omit both to keep the self-managed gear button.
+  // Optional controlled mode, used by ProjectDashboard to auto-open the dialog
+  // right after a repo is connected (?settings=1). Omit both to keep the
+  // self-managed gear button.
   open?: boolean
   onOpenChange?: (open: boolean) => void
 }
