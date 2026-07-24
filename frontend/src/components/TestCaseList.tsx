@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from 'react'
+﻿import { useState, useEffect, useMemo, useRef } from 'react'
 import axios from 'axios'
 import {
   Sparkles,
@@ -12,6 +12,8 @@ import {
   Clock,
   ExternalLink,
   Search,
+  Code,
+  Copy,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useUser } from '../App'
@@ -62,6 +64,10 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
   // When set, the execution modal runs only this single test case (auto-started),
   // independent of the checkbox selection used by "Run Selected".
   const [singleRunId, setSingleRunId] = useState<number | null>(null)
+  // When true, the execution modal opens auto-started in generate-only mode
+  // (bulk "Generate Scripts" on the selection bar) — scripts are generated and
+  // cached for every selected case, nothing is executed.
+  const [batchGenerateOnly, setBatchGenerateOnly] = useState(false)
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [highlightId, setHighlightId] = useState<number | null>(null)
   // Client-side filtering of the test-case list.
@@ -70,18 +76,23 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
   const [statusFilter, setStatusFilter] = useState('all')
   // Test case awaiting delete confirmation (null = dialog closed).
   const [confirmDelete, setConfirmDelete] = useState<TestCase | null>(null)
+  // Test case whose script is being generated inline (null = none in flight).
+  const [generatingScriptId, setGeneratingScriptId] = useState<number | null>(null)
 
   const runsBlocked = !targetDomain
 
-  const fetchTestCases = async () => {
-    setLoading(true)
+  // silent=true refreshes the list in place without flipping `loading` — the
+  // spinner swap collapses the page height, which throws the scroll position
+  // away (e.g. refreshing after the execution modal closes).
+  const fetchTestCases = async (silent = false) => {
+    if (!silent) setLoading(true)
     try {
       const res = await axios.get(`/api/test-cases/repo/${repoId}`)
       setTestCases(res.data)
     } catch {
       toast.error('Failed to load test cases')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -89,11 +100,20 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
     fetchTestCases()
   }, [repoId])
 
+  // The ?tc focus already applied. The effect below depends on `testCases`
+  // (it must wait for the list to load), but without this guard every later
+  // list update — a run finishing, a script being generated — would re-fire
+  // it, collapsing whatever row the user opened and yanking the scroll back
+  // to the focused case.
+  const appliedFocusRef = useRef<number | null>(null)
+
   // When deep-linked from a project page (?tc=:id), expand, scroll to, and
   // briefly highlight that specific test case once the list has loaded.
   useEffect(() => {
     if (loading || !focusTestCaseId) return
+    if (appliedFocusRef.current === focusTestCaseId) return
     if (!testCases.some(tc => tc.id === focusTestCaseId)) return
+    appliedFocusRef.current = focusTestCaseId
     setExpandedId(focusTestCaseId)
     setHighlightId(focusTestCaseId)
     const scrollTimer = setTimeout(() => {
@@ -137,7 +157,43 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
   // Open the execution modal scoped to a single test case (from the expanded row).
   const runSingleTest = (id: number) => {
     setSingleRunId(id)
+    setBatchGenerateOnly(false)
     setExecutionModalOpen(true)
+  }
+
+  // Generate (and cache) the Playwright script for one test case without
+  // executing it. The script shows inline in the expanded row, ready to copy
+  // or to be reused by a later run.
+  const generateScript = async (tc: TestCase) => {
+    setGeneratingScriptId(tc.id)
+    try {
+      const res = await axios.post('/api/test-cases/run', {
+        test_case_ids: [tc.id],
+        generate_only: true,
+      })
+      if (user && typeof res.data.credits === 'number') {
+        setUser({ ...user, credits: res.data.credits })
+      }
+      const result = res.data.results?.[0]
+      if (result?.status === 'script_generated' && result.playwright_script) {
+        setTestCases(prev =>
+          prev.map(t => (t.id === tc.id ? { ...t, playwright_script: result.playwright_script } : t))
+        )
+        toast.success('Script generated')
+      } else {
+        toast.error(result?.error || 'Script generation failed')
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.detail || 'Script generation failed')
+    } finally {
+      setGeneratingScriptId(null)
+    }
+  }
+
+  const copyScript = (script: string) => {
+    navigator.clipboard?.writeText(script)
+      .then(() => toast.success('Script copied'))
+      .catch(() => toast.error('Copy failed'))
   }
 
   // Tests handed to the modal: just the single-run target when set, otherwise the
@@ -426,7 +482,18 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
                   </div>
                   {tc.playwright_script && (
                     <div>
-                      <span className="text-gray-500 text-sm">Playwright Script:</span>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-500 text-sm inline-flex items-center gap-1">
+                          <Code className="w-3.5 h-3.5" /> Playwright Script:
+                        </span>
+                        <button
+                          onClick={() => copyScript(tc.playwright_script!)}
+                          aria-label="Copy script"
+                          className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-900 transition-colors"
+                        >
+                          <Copy className="w-3.5 h-3.5" /> Copy
+                        </button>
+                      </div>
                       <pre className="mt-1 bg-gray-900 text-gray-300 p-3 rounded-lg text-xs overflow-x-auto max-h-72 overflow-y-auto">
                         {tc.playwright_script}
                       </pre>
@@ -452,18 +519,37 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
                       View Session <ExternalLink className="w-3 h-3" />
                     </a>
                   )}
-                  <div className="flex justify-end">
+                  <div className="flex flex-col items-end gap-2">
+                    <button
+                      onClick={() => generateScript(tc)}
+                      disabled={generatingScriptId === tc.id}
+                      title={`Generates the Playwright script only — no browser run (costs ${RUN_COST} credits). Run it whenever you're ready.`}
+                      className="btn-secondary inline-flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {generatingScriptId === tc.id ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <Code className="w-4 h-4" />
+                          {tc.playwright_script ? 'Regenerate Script' : 'Generate Script'}
+                        </>
+                      )}
+                    </button>
                     <button
                       onClick={() => runSingleTest(tc.id)}
+                      disabled={runsBlocked || generatingScriptId === tc.id}
                       title={
                         runsBlocked
-                          ? `Execution disabled — no target URL configured. Generates and caches the script only (costs ${RUN_COST} credits).`
+                          ? 'Execution disabled — no target URL configured. Set it in repository settings.'
                           : `Costs ${RUN_COST} credits`
                       }
                       className="btn-primary inline-flex items-center gap-2 text-sm"
                     >
-                      {runsBlocked ? <Sparkles className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                      {runsBlocked ? 'Generate Script' : 'Run Test'}
+                      <Play className="w-4 h-4" />
+                      Run Test
                     </button>
                   </div>
                 </div>
@@ -477,8 +563,8 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
 
       {/* Floating Run Bar — stays visible without scrolling to the bottom */}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] max-w-md">
-          <div className="bg-gray-900 rounded-2xl shadow-2xl ring-1 ring-white/10 p-3 pl-5 flex items-center justify-between gap-4">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] max-w-2xl">
+          <div className="bg-gray-900 rounded-2xl shadow-2xl ring-1 ring-white/10 p-3 pl-5 flex flex-wrap items-center justify-between gap-3">
             <div className="text-white text-sm whitespace-nowrap">
               <span className="font-semibold">{selectedIds.size}</span> test case{selectedIds.size > 1 ? 's' : ''} selected
               <span className="text-gray-400"> · {selectedIds.size * RUN_COST} credits</span>
@@ -491,12 +577,25 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
                 Clear
               </button>
               <button
-                onClick={() => { setSingleRunId(null); setExecutionModalOpen(true) }}
-                title={runsBlocked ? 'Execution disabled — no target URL configured. Generates and caches scripts only.' : undefined}
+                onClick={() => { setSingleRunId(null); setBatchGenerateOnly(true); setExecutionModalOpen(true) }}
+                title={`Generates the Playwright scripts only — no browser runs (costs ${RUN_COST} credits each)`}
+                className="btn-secondary inline-flex items-center gap-2"
+              >
+                <Code className="w-4 h-4" />
+                Generate Scripts
+              </button>
+              <button
+                onClick={() => { setSingleRunId(null); setBatchGenerateOnly(false); setExecutionModalOpen(true) }}
+                disabled={runsBlocked}
+                title={
+                  runsBlocked
+                    ? 'Execution disabled — no target URL configured. Set it in repository settings.'
+                    : undefined
+                }
                 className="btn-primary inline-flex items-center gap-2"
               >
-                {runsBlocked ? <Sparkles className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                {runsBlocked ? 'Generate Scripts' : 'Run Selected'}
+                <Play className="w-4 h-4" />
+                Run Selected
               </button>
             </div>
           </div>
@@ -505,9 +604,10 @@ export default function TestCaseList({ repoId, branch, targetDomain, globalInstr
 
       <TestCaseExecutionModal
         isOpen={executionModalOpen}
-        onClose={() => { setExecutionModalOpen(false); setSingleRunId(null); fetchTestCases(); onReload() }}
+        onClose={() => { setExecutionModalOpen(false); setSingleRunId(null); setBatchGenerateOnly(false); fetchTestCases(true); onReload() }}
         testCases={modalTestCases}
         autoStart={singleRunId != null}
+        autoStartGenerateOnly={batchGenerateOnly}
         onComplete={s =>
           s.passed + s.failed === 0 && s.generated > 0
             ? toast.success(`${s.generated} script${s.generated > 1 ? 's' : ''} generated`)

@@ -65,6 +65,9 @@ interface Props {
   repoId: number
   // Begin executing immediately on open (used for single-test "Run Test").
   autoStart?: boolean
+  // Begin a generate-only batch immediately on open (used for bulk "Generate
+  // Scripts"). Needs no target URL, so it auto-starts even when runs are blocked.
+  autoStartGenerateOnly?: boolean
   // Fired once when a batch finishes, for a completion toast in the parent.
   onComplete?: (summary: { passed: number; failed: number; generated: number; total: number; durationMs: number }) => void
   // Called with the user's new credit balance after a run charges credits.
@@ -83,7 +86,7 @@ type RunResult = {
   healed?: boolean
 }
 
-export default function TestCaseExecutionModal({ isOpen, onClose, testCases, repository, autoStart = false, onComplete, onCreditsChange }: Props) {
+export default function TestCaseExecutionModal({ isOpen, onClose, testCases, repository, autoStart = false, autoStartGenerateOnly = false, onComplete, onCreditsChange }: Props) {
   const [baseUrl, setBaseUrl] = useState(repository.target_domain ?? '')
   const [currentIdx, setCurrentIdx] = useState(-1)
   const [isExecuting, setIsExecuting] = useState(false)
@@ -134,15 +137,18 @@ export default function TestCaseExecutionModal({ isOpen, onClose, testCases, rep
     const resolvedUrl = repository.target_domain ?? ''
     setBaseUrl(resolvedUrl)
     setBatchDone(false)
-    setGenerateOnly(false)
+    setGenerateOnly(autoStartGenerateOnly)
     ranRef.current = false
-    // Auto-start kicks off execution from the first test case — but only if the
-    // repo has a valid target URL; otherwise open idle so the user sees the
-    // blocked state (they can still generate scripts).
-    const canAutoStart = autoStart && !!repository.target_domain && isValidHttpUrl(resolvedUrl)
+    // Auto-start kicks off from the first test case. Generate-only batches need
+    // no target URL; execution only auto-starts if the repo has a valid one —
+    // otherwise open idle so the user sees the blocked state (they can still
+    // generate scripts).
+    const canAutoStart =
+      autoStartGenerateOnly ||
+      (autoStart && !!repository.target_domain && isValidHttpUrl(resolvedUrl))
     setCurrentIdx(canAutoStart ? 0 : -1)
     setIsExecuting(canAutoStart)
-  }, [isOpen, testCases, repository, autoStart])
+  }, [isOpen, testCases, repository, autoStart, autoStartGenerateOnly])
 
   // Sequential execution
   useEffect(() => {
