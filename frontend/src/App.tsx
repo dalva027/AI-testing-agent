@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, createContext, useContext } from 'rea
 import axios from 'axios'
 import { Toaster } from 'react-hot-toast'
 import Layout from './components/Layout'
+import ColdStartOverlay from './components/ColdStartOverlay'
 import Landing from './pages/Landing'
 import Dashboard from './pages/Dashboard'
 import ProjectDashboard from './pages/ProjectDashboard'
@@ -171,6 +172,8 @@ function App() {
         </Route>
       </Routes>
       <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+      {/* Friendly full-screen loader while the free-tier backend cold-starts. */}
+      <ColdStartOverlay />
     </UserContext.Provider>
   )
 }

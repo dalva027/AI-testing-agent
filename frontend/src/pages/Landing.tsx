@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { useUser } from '../App'
 import { githubLoginUrl } from '../lib/api'
+import { startGithubLogin } from '../lib/coldStart'
 
 const runnerLines: { glyph: '✓' | '✗'; type: string; name: string; ms: string; ok: boolean }[] = [
   { glyph: '✓', type: 'auth', name: 'login with valid credentials', ms: '412ms', ok: true },
@@ -69,6 +70,7 @@ export default function Landing() {
               ) : (
                 <a
                   href={githubLoginUrl}
+                  onClick={startGithubLogin}
                   className="inline-flex items-center gap-2 bg-primary-500 text-gray-900 font-semibold px-6 py-3 rounded-full hover:bg-primary-200 transition-colors"
                 >
                   <Github className="w-5 h-5" />
@@ -246,6 +248,7 @@ export default function Landing() {
           ) : (
             <a
               href={githubLoginUrl}
+              onClick={startGithubLogin}
               className="inline-flex items-center gap-2 bg-primary-500 text-gray-900 font-semibold px-6 py-3 rounded-full hover:bg-primary-200 transition-colors shrink-0"
             >
               <Github className="w-5 h-5" />

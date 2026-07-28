@@ -2,6 +2,7 @@
 import { Bug, LayoutDashboard, BarChart3, LogOut, Sun, Moon } from 'lucide-react'
 import { useUser } from '../App'
 import { githubLoginUrl } from '../lib/api'
+import { startGithubLogin } from '../lib/coldStart'
 
 export default function Layout() {
   const location = useLocation()
@@ -82,7 +83,7 @@ export default function Layout() {
               ) : (
                 // Start the OAuth flow directly (full-page navigation to the
                 // backend) instead of routing to /dashboard first.
-                <a href={githubLoginUrl} className="btn-primary text-sm">
+                <a href={githubLoginUrl} onClick={startGithubLogin} className="btn-primary text-sm">
                   Connect GitHub
                 </a>
               )}
