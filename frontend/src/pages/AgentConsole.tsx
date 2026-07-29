@@ -9,6 +9,7 @@ import {
   ChevronDown,
   CircleHelp,
   FileText,
+  Github,
   Loader2,
   Plus,
   Send,
@@ -18,6 +19,8 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useUser } from '../App'
+import { githubLoginUrl } from '../lib/api'
+import { startGithubLogin } from '../lib/coldStart'
 
 interface AgentTask {
   id: number
@@ -195,9 +198,16 @@ function EventRow({ event }: { event: AgentEvent }) {
 }
 
 export default function AgentConsole() {
+  // Mounted both per-repo (/dashboard/:repoId/agent) and globally (/agent,
+  // reached from the main dashboard). In global mode the task list spans all
+  // repositories and new tasks pick their target repo from a selector.
   const { repoId } = useParams<{ repoId: string }>()
+  const isGlobal = !repoId
   const { token } = useUser()
   const [repo, setRepo] = useState<Repo | null>(null)
+  const [repos, setRepos] = useState<Repo[]>([])
+  const [reposLoaded, setReposLoaded] = useState(false)
+  const [assignRepoId, setAssignRepoId] = useState('')
   const [tasks, setTasks] = useState<AgentTask[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [task, setTask] = useState<AgentTask | null>(null)
@@ -210,9 +220,11 @@ export default function AgentConsole() {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const loadTasks = useCallback(async () => {
-    if (!token || !repoId) return
+    if (!token) return
     try {
-      const res = await axios.get('/api/agent/tasks', { params: { repo_id: repoId } })
+      const res = await axios.get('/api/agent/tasks', {
+        params: repoId ? { repo_id: repoId } : {},
+      })
       setTasks(res.data)
     } catch {
       toast.error('Failed to load agent tasks')
@@ -220,8 +232,20 @@ export default function AgentConsole() {
   }, [token, repoId])
 
   useEffect(() => {
-    if (!token || !repoId) return
-    axios.get(`/api/repos/${repoId}`).then(res => setRepo(res.data)).catch(() => {})
+    if (!token) return
+    if (repoId) {
+      axios.get(`/api/repos/${repoId}`).then(res => setRepo(res.data)).catch(() => {})
+    } else {
+      axios
+        .get('/api/repos')
+        .then(res => {
+          setRepos(res.data)
+          // With a single repo there's nothing to choose — preselect it.
+          if (res.data.length === 1) setAssignRepoId(String(res.data[0].id))
+        })
+        .catch(() => {})
+        .finally(() => setReposLoaded(true))
+    }
     loadTasks()
   }, [token, repoId, loadTasks])
 
@@ -274,10 +298,11 @@ export default function AgentConsole() {
 
   const assignTask = async () => {
     const goal = input.trim()
-    if (!goal || !repoId) return
+    const targetRepoId = repoId ?? assignRepoId
+    if (!goal || !targetRepoId) return
     setBusy(true)
     try {
-      const res = await axios.post('/api/agent/tasks', { repo_id: Number(repoId), goal })
+      const res = await axios.post('/api/agent/tasks', { repo_id: Number(targetRepoId), goal })
       setInput('')
       setTasks(prev => [res.data, ...prev])
       setSelectedId(res.data.id)
@@ -326,14 +351,39 @@ export default function AgentConsole() {
       ? 'Answer the agent…'
       : 'Send a follow-up… e.g. "now re-run just the failed ones"'
 
+  // The repo a NEW task would be assigned to (fixed in repo mode, picked in
+  // global mode); drives the missing-target-URL warning and the Assign guard.
+  const assignRepo = isGlobal ? repos.find(r => String(r.id) === assignRepoId) ?? null : repo
+  const repoNames = new Map(repos.map(r => [r.id, r.name]))
+  const missingAssignRepo = isGlobal && selectedId === null && !assignRepoId
+
+  if (!token) {
+    return (
+      <div className="card p-12 text-center max-w-xl mx-auto mt-10">
+        <div className="w-14 h-14 bg-gray-900 rounded-2xl flex items-center justify-center mx-auto mb-5">
+          <Github className="w-7 h-7 text-white" />
+        </div>
+        <h2 className="text-2xl font-black tracking-tight text-gray-900 mb-2">Connect GitHub to get started</h2>
+        <p className="text-gray-500 mb-6">
+          The AI agent runs testing tasks against your repositories. Connect a GitHub account to
+          assign it work.
+        </p>
+        <a href={githubLoginUrl} onClick={startGithubLogin} className="btn-primary inline-flex items-center gap-2">
+          <Github className="w-4 h-4" />
+          Connect GitHub
+        </a>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <Link
-        to={`/dashboard/${repoId}`}
+        to={isGlobal ? '/dashboard' : `/dashboard/${repoId}`}
         className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
-        {repo ? repo.name : 'Project'}
+        {isGlobal ? 'Dashboard' : repo ? repo.name : 'Project'}
       </Link>
 
       <div className="flex items-center gap-4">
@@ -343,8 +393,9 @@ export default function AgentConsole() {
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-black tracking-tight text-gray-900">AI Agent</h1>
           <p className="text-sm text-gray-500 truncate">
-            Assign testing tasks in plain language{repo ? ` for ${repo.full_name}` : ''} — the
-            agent runs tests, investigates failures and reports back.
+            {isGlobal
+              ? 'Assign testing tasks in plain language across any of your repositories — the agent runs tests, investigates failures and reports back.'
+              : `Assign testing tasks in plain language${repo ? ` for ${repo.full_name}` : ''} — the agent runs tests, investigates failures and reports back.`}
           </p>
         </div>
         <button
@@ -361,12 +412,12 @@ export default function AgentConsole() {
         </button>
       </div>
 
-      {repo && !repo.target_domain && (
+      {(!isGlobal || selectedId === null) && assignRepo && !assignRepo.target_domain && (
         <div className="bg-amber-100 border border-amber-200 rounded-3xl px-4 py-3 flex items-center gap-2 text-sm text-amber-800">
           <AlertTriangle className="w-4 h-4 shrink-0" />
-          This repository has no target URL — the agent cannot execute tests until one is set
-          (it may ask you for it, or set it in{' '}
-          <Link to={`/dashboard/${repoId}?settings=1`} className="underline font-medium">
+          {isGlobal ? `${assignRepo.name} has` : 'This repository has'} no target URL — the agent
+          cannot execute tests until one is set (it may ask you for it, or set it in{' '}
+          <Link to={`/dashboard/${assignRepo.id}?settings=1`} className="underline font-medium">
             repository settings
           </Link>
           ).
@@ -400,6 +451,11 @@ export default function AgentConsole() {
                 >
                   <div className="flex items-center gap-2 mb-1">
                     <StatusBadge status={t.status} />
+                    {isGlobal && repoNames.has(t.repo_id) && (
+                      <span className="badge badge-neutral max-w-[9rem] truncate">
+                        {repoNames.get(t.repo_id)}
+                      </span>
+                    )}
                     <span className="text-xs text-gray-400 ml-auto shrink-0">
                       {new Date(t.created_at).toLocaleDateString()}
                     </span>
@@ -419,10 +475,21 @@ export default function AgentConsole() {
                 <Bot className="w-7 h-7 text-primary-600" />
               </div>
               <h3 className="font-semibold text-gray-900 mb-1">Assign a new task</h3>
-              <p className="text-sm text-gray-500 max-w-sm">
-                Tell the agent what to test. It can use existing test cases, generate new ones,
-                run them in a real browser with self-healing, and dig into failures.
-              </p>
+              {isGlobal && reposLoaded && repos.length === 0 ? (
+                <p className="text-sm text-gray-500 max-w-sm">
+                  The agent works against one of your repositories.{' '}
+                  <Link to="/dashboard" className="text-primary-600 underline font-medium">
+                    Add a repository
+                  </Link>{' '}
+                  first, then assign tasks here.
+                </p>
+              ) : (
+                <p className="text-sm text-gray-500 max-w-sm">
+                  Tell the agent what to test. It can use existing test cases, generate new ones,
+                  run them in a real browser with self-healing, and dig into failures.
+                  {isGlobal && ' Pick a repository below to get started.'}
+                </p>
+              )}
             </div>
           ) : (
             <>
@@ -431,6 +498,11 @@ export default function AgentConsole() {
                 {task ? (
                   <>
                     <StatusBadge status={task.status} />
+                    {isGlobal && repoNames.has(task.repo_id) && (
+                      <span className="badge badge-neutral max-w-[9rem] truncate shrink-0">
+                        {repoNames.get(task.repo_id)}
+                      </span>
+                    )}
                     <p className="text-sm text-gray-600 truncate flex-1">{task.goal}</p>
                     <span className="text-xs text-gray-400 shrink-0">
                       {task.credits_spent}/{task.credits_budget} credits
@@ -479,13 +551,31 @@ export default function AgentConsole() {
 
           {/* Composer */}
           <div className="border-t border-gray-100 p-3 flex items-end gap-2">
+            {isGlobal && selectedId === null && (
+              <select
+                value={assignRepoId}
+                onChange={e => setAssignRepoId(e.target.value)}
+                disabled={busy || repos.length === 0}
+                aria-label="Repository to run the task against"
+                className="input w-auto max-w-[11rem] text-sm shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <option value="" disabled>
+                  {repos.length === 0 ? 'No repositories' : 'Repository…'}
+                </option>
+                {repos.map(r => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <textarea
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
-                  if (!busy && !isActive && input.trim()) composerAction()
+                  if (!busy && !isActive && input.trim() && !missingAssignRepo) composerAction()
                 }
               }}
               placeholder={composerPlaceholder}
@@ -495,7 +585,7 @@ export default function AgentConsole() {
             />
             <button
               onClick={composerAction}
-              disabled={isActive || busy || !input.trim()}
+              disabled={isActive || busy || !input.trim() || missingAssignRepo}
               className="btn-primary inline-flex items-center gap-2 shrink-0"
             >
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}

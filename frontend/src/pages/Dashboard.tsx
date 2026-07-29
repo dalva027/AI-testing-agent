@@ -12,6 +12,7 @@ import {
   Github,
   Plus,
   ArrowRight,
+  Bot,
   GitBranch,
   Circle,
   X,
@@ -245,6 +246,10 @@ export default function Dashboard() {
           <p className="text-gray-500 mt-1">Your repositories and their test coverage at a glance</p>
         </div>
         <div className="flex items-center gap-3">
+          <Link to="/agent" className="btn-secondary inline-flex items-center gap-2">
+            <Bot className="w-4 h-4" />
+            AI Agent
+          </Link>
           <button onClick={fetchData} className="btn-secondary inline-flex items-center gap-2">
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -345,6 +350,14 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0 mt-1">
+                      <button
+                        onClick={e => { e.preventDefault(); e.stopPropagation(); navigate(`/dashboard/${repo.id}/agent`) }}
+                        aria-label={`Open AI agent for ${repo.name}`}
+                        title="AI Agent"
+                        className="p-1.5 text-gray-300 hover:text-primary-600 transition-colors"
+                      >
+                        <Bot className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={e => { e.preventDefault(); e.stopPropagation(); setConfirmRepo(repo) }}
                         aria-label="Remove repository"

@@ -115,7 +115,7 @@ function WakeScreen({ ready }: { ready: boolean }) {
           {ready ? 'We’re live!' : 'Waking up the server…'}
         </h1>
         <p className="mb-6 text-sm text-gray-500">
-          Our free-tier server takes a nap when nobody’s around, and your visit just woke it up.
+          Loading testing platform and getting AI agent ready
           This usually takes under a minute — everything continues automatically.
         </p>
 

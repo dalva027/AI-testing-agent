@@ -168,6 +168,8 @@ function App() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="dashboard/:repoId" element={<ProjectDashboard />} />
           <Route path="dashboard/:repoId/agent" element={<AgentConsole />} />
+          {/* Global agent console (no repo preselected) — reachable from the main dashboard. */}
+          <Route path="agent" element={<AgentConsole />} />
           <Route path="results" element={<TestResults />} />
         </Route>
       </Routes>

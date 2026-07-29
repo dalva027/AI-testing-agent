@@ -1,5 +1,5 @@
 ﻿import { Outlet, Link, useLocation } from 'react-router-dom'
-import { Bug, LayoutDashboard, BarChart3, LogOut, Sun, Moon } from 'lucide-react'
+import { Bug, LayoutDashboard, Bot, BarChart3, LogOut, Sun, Moon } from 'lucide-react'
 import { useUser } from '../App'
 import { githubLoginUrl } from '../lib/api'
 import { startGithubLogin } from '../lib/coldStart'
@@ -10,6 +10,7 @@ export default function Layout() {
 
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/agent', label: 'AI Agent', icon: Bot },
     { path: '/results', label: 'Test Results', icon: BarChart3 },
   ]
 
